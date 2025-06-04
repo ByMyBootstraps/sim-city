@@ -113,7 +113,6 @@ function GameView({ playerId, username }: { playerId: string; username: string }
   const { data: npcZombies } = useSuspenseQuery(npcZombiesQueryOptions);
   const updatePosition = useMutation(api.players.updatePlayerPosition);
   const cleanupDisconnected = useMutation(api.players.cleanupDisconnectedPlayers);
-  const runNPCAI = useMutation(api.npcZombies.runNPCAI);
   const updateNPCs = useMutation(api.npcZombies.updateNPCZombies);
   
   // Professional movement system state
@@ -367,7 +366,7 @@ function GameView({ playerId, username }: { playerId: string; username: string }
       clearInterval(cleanup);
       clearInterval(npcAI);
     };
-  }, [cleanupDisconnected, runNPCAI]);
+  }, [cleanupDisconnected, updateNPCs]);
 
   if (!currentPlayer) {
     return <div className="text-center">Loading...</div>;

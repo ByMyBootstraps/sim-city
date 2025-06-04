@@ -156,13 +156,6 @@ export const clearAllNPCs = mutation({
   },
 });
 
-// Action to run NPC AI loop
-export const runNPCAI = action({
-  args: {},
-  handler: async (ctx) => {
-    await ctx.runMutation(internal.npcZombies.updateNPCZombies, {});
-  },
-});
 
 // Balance NPCs based on human count
 export const balanceNPCs = internalMutation({
