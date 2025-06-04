@@ -33,6 +33,7 @@
 ### Commits Made:
 - 5f40893: init: documented requirements and setup for 2D multiplayer city game
 - 3a8d214: feat: implement core 2D multiplayer city game with real-time movement
+- 5d8a242: fix: remove conflicting users.ts file, backend now working
 
 ### Key Context:
 - Real-time multiplayer requires Convex subscriptions for player positions

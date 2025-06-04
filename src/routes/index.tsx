@@ -4,6 +4,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
 import { useState, useRef, useEffect } from "react";
 import { api } from "../../convex/_generated/api";
+import { cityLayout, checkCollision, getValidSpawnPoints } from "@/cityLayout";
 
 const playersQueryOptions = convexQuery(api.players.getAllPlayers, {});
 
@@ -105,25 +106,23 @@ function GameView({ playerId, username }: { playerId: string; username: string }
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Clear canvas
-    ctx.fillStyle = '#2a2a2a';
+    // Clear canvas with grass background
+    ctx.fillStyle = '#4A5D23';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Draw simple grid for city feel
-    ctx.strokeStyle = '#404040';
-    ctx.lineWidth = 1;
-    for (let x = 0; x < canvas.width; x += 50) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, canvas.height);
-      ctx.stroke();
-    }
-    for (let y = 0; y < canvas.height; y += 50) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(canvas.width, y);
-      ctx.stroke();
-    }
+    // Draw city layout
+    cityLayout.forEach(obj => {
+      ctx.fillStyle = obj.color;
+      ctx.fillRect(obj.x, obj.y, obj.width, obj.height);
+      
+      // Add building names
+      if (obj.name && obj.type === 'building') {
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(obj.name, obj.x + obj.width / 2, obj.y + obj.height / 2);
+      }
+    });
 
     // Draw current player (blue)
     if (currentPlayer) {
@@ -179,7 +178,8 @@ function GameView({ playerId, username }: { playerId: string; username: string }
           return;
       }
 
-      if (newX !== currentPlayer.x || newY !== currentPlayer.y) {
+      // Check for collisions with buildings before moving
+      if (!checkCollision(newX, newY) && (newX !== currentPlayer.x || newY !== currentPlayer.y)) {
         void updatePosition({ playerId, x: newX, y: newY });
       }
     };

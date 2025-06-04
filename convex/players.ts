@@ -17,11 +17,21 @@ export const spawnPlayer = mutation({
       throw new ConvexError("Username already taken");
     }
 
-    // Spawn player at random position
+    // Spawn player at a safe sidewalk location
+    const spawnPoints = [
+      { x: 150, y: 200 }, { x: 350, y: 200 }, { x: 550, y: 200 }, { x: 750, y: 200 },
+      { x: 150, y: 400 }, { x: 350, y: 400 }, { x: 550, y: 400 }, { x: 750, y: 400 },
+      { x: 220, y: 100 }, { x: 220, y: 300 }, { x: 220, y: 500 },
+      { x: 420, y: 100 }, { x: 420, y: 300 }, { x: 420, y: 500 },
+      { x: 620, y: 100 }, { x: 620, y: 300 }, { x: 620, y: 500 },
+    ];
+    
+    const randomSpawn = spawnPoints[Math.floor(Math.random() * spawnPoints.length)];
+    
     const playerId = await ctx.db.insert("players", {
       username,
-      x: Math.floor(Math.random() * 800) + 100, // Random x between 100-900
-      y: Math.floor(Math.random() * 600) + 100, // Random y between 100-700
+      x: randomSpawn.x,
+      y: randomSpawn.y,
       health: 100,
       lastActiveTime: Date.now(),
     });
