@@ -44,9 +44,10 @@ export const spawnPlayer = mutation({
     
     const randomSpawn = spawnPoints[Math.floor(Math.random() * spawnPoints.length)];
     
-    // Count current players to determine if this should be the first zombie
+    // Count current active players to determine if this should be the first zombie
     const currentPlayers = await ctx.db.query("players").collect();
-    const isFirstPlayer = currentPlayers.length === 0;
+    const activeZombies = currentPlayers.filter(p => p.isZombie === true);
+    const isFirstZombie = activeZombies.length === 0; // First player when no zombies exist
     
     const playerId = await ctx.db.insert("players", {
       username,
@@ -54,12 +55,12 @@ export const spawnPlayer = mutation({
       y: randomSpawn.y,
       health: 100,
       lastActiveTime: Date.now(),
-      isZombie: isFirstPlayer, // First player becomes zombie
+      isZombie: isFirstZombie, // First player when no zombies exist becomes zombie
       connectionId: connectionId,
     });
 
     // Update game state if this was the first zombie
-    if (isFirstPlayer && gameState) {
+    if (isFirstZombie && gameState) {
       await ctx.db.patch(gameState._id, {
         firstZombieSelected: true,
         status: "playing",
