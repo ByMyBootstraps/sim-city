@@ -8,7 +8,18 @@ export default defineSchema({
     y: v.number(),
     health: v.number(),
     lastActiveTime: v.number(),
+    isZombie: v.boolean(),
+    connectionId: v.string(), // For tracking disconnections
   })
     .index("by_username", ["username"])
-    .index("by_lastActiveTime", ["lastActiveTime"]),
+    .index("by_lastActiveTime", ["lastActiveTime"])
+    .index("by_connectionId", ["connectionId"])
+    .index("by_isZombie", ["isZombie"]),
+    
+  gameState: defineTable({
+    gameId: v.string(),
+    status: v.union(v.literal("waiting"), v.literal("playing"), v.literal("ended")),
+    firstZombieSelected: v.boolean(),
+    roundStartTime: v.optional(v.number()),
+  }).index("by_gameId", ["gameId"]),
 });

@@ -15,15 +15,19 @@
 - Created claude-notes.md file
 - Gathered requirements from user
 - Removed template line from CLAUDE.md
-- Created player schema in Convex (username, x, y, health, lastActiveTime)
-- Implemented player mutations (spawn, update position, get all players)
-- Built complete game UI with username form and canvas game view
-- Added WASD/arrow key movement controls
-- Implemented health bar display
-- Removed all demo auth content
+- Created detailed city layout with buildings, roads, parks
+- Added collision detection for buildings
+- Updated schema for zombie mechanics (isZombie, connectionId)
+- Implemented zombie infection on contact (25px radius)
+- Added automatic disconnect cleanup (30 second timeout)
+- First player becomes patient zero automatically
+- Zombie speed scaling (faster base speed, slower with more zombies)
+- Smooth movement system with diagonal support
+- Real-time visual indicators (zombie emoji, infection radius)
+- Game state tracking and end conditions
 
 ### Current Step:
-- Testing implementation
+- Testing zombie apocalypse gameplay
 
 ### Next Steps:
 1. Start dev servers and test the game
