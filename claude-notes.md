@@ -31,7 +31,8 @@
 3. Verify real-time movement sync between players
 
 ### Commits Made:
-- (None yet - first commit after planning)
+- 5f40893: init: documented requirements and setup for 2D multiplayer city game
+- 3a8d214: feat: implement core 2D multiplayer city game with real-time movement
 
 ### Key Context:
 - Real-time multiplayer requires Convex subscriptions for player positions
