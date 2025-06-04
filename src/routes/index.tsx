@@ -497,7 +497,7 @@ function GameView({ playerId, username }: { playerId: Id<"players">; username: s
                 </div>
               </div>
               <div className="text-sm opacity-70 mb-6">
-                {players.length}/{gameState.playerCount || 20} players joined
+                {players.length}/20 players joined
               </div>
               
               {isHost ? (

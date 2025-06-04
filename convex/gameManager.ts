@@ -37,6 +37,7 @@ export const initializeGame = internalMutation({
       playerCount: 0,
       zombieCount: 0,
       gameStartDelay: undefined,
+      firstZombieSelected: false,
     });
 
     return gameStateId;
@@ -183,8 +184,12 @@ export const startGameCountdown = mutation({
       throw new ConvexError("Game is not in lobby state");
     }
 
+    // Count current players
+    const players = await ctx.db.query("players").collect();
+    const activePlayers = players.filter(p => Date.now() - p.lastActiveTime < 30000);
+    
     // Check minimum players
-    if (gameState.playerCount < GAME_CONFIG.MIN_PLAYERS_TO_START) {
+    if (activePlayers.length < GAME_CONFIG.MIN_PLAYERS_TO_START) {
       throw new ConvexError(`Need at least ${GAME_CONFIG.MIN_PLAYERS_TO_START} players to start`);
     }
 

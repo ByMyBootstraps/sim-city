@@ -33,8 +33,10 @@ export default defineSchema({
     roundStartTime: v.optional(v.number()), // When current round started
     roundEndTime: v.optional(v.number()), // When current round ended
     lastNPCUpdate: v.optional(v.number()), // Track last NPC update to prevent conflicts
-    playerCount: v.number(), // Current number of active players
-    zombieCount: v.number(), // Current number of zombies
+    playerCount: v.optional(v.number()), // Current number of active players
+    zombieCount: v.optional(v.number()), // Current number of zombies
     gameStartDelay: v.optional(v.number()), // Countdown timer for game start
+    // Legacy fields for backward compatibility
+    firstZombieSelected: v.optional(v.boolean()),
   }).index("by_gameId", ["gameId"]),
 });
