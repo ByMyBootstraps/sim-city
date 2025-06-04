@@ -199,21 +199,24 @@ export const updateNPCZombies = mutation({
             isZombie: true,
             health: 100, // Zombies have full health
           });
-          
-          // Rebalance NPCs when a human gets infected (fewer humans = fewer NPCs needed)
-          await ctx.runMutation(internal.npcZombies.balanceNPCs, {});
+          break; // Only infect one human per NPC per update to avoid chaos
         }
       }
       
-      // Update NPC with new position and state
-      await ctx.db.patch(npc._id, {
-        x: newX,
-        y: newY,
-        targetX: newTargetX,
-        targetY: newTargetY,
-        lastMoveTime: now,
-        wanderCooldown: newWanderCooldown,
-      });
+      // Update NPC with new position and state (with error handling)
+      try {
+        await ctx.db.patch(npc._id, {
+          x: newX,
+          y: newY,
+          targetX: newTargetX,
+          targetY: newTargetY,
+          lastMoveTime: now,
+          wanderCooldown: newWanderCooldown,
+        });
+      } catch (error) {
+        // NPC might have been deleted by balancing, skip this NPC
+        continue;
+      }
     }
   },
 });

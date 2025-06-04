@@ -385,7 +385,9 @@ function GameView({ playerId, username }: { playerId: string; username: string }
     }, 10000); // Clean up every 10 seconds
 
     const npcAI = setInterval(() => {
-      void updateNPCs();
+      updateNPCs().catch(() => {
+        // Ignore NPC update errors during rapid state changes
+      });
     }, 100); // Run NPC AI every 100ms for smooth movement
 
     return () => {
