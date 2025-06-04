@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { ConvexError } from "convex/values";
 import { internal } from "./_generated/api";
+import { ConvexError } from "convex/values";
 
 export const spawnPlayer = mutation({
   args: {
@@ -19,28 +19,6 @@ export const spawnPlayer = mutation({
       throw new ConvexError("Username already taken");
     }
 
-    // Get or create game state first to avoid race conditions
-    let gameState = await ctx.db
-      .query("gameState")
-      .withIndex("by_gameId", (q) => q.eq("gameId", "main"))
-      .unique();
-      
-    if (!gameState) {
-      const gameStateId = await ctx.db.insert("gameState", {
-        gameId: "main",
-        status: "lobby",
-        firstZombieSelected: false,
-        hostPlayerId: undefined, // Will be set below for first player
-      });
-      
-      // Fetch the newly created game state
-      gameState = await ctx.db.get(gameStateId);
-    }
-
-    // Get current players to determine if this is the first player
-    const existingPlayers = await ctx.db.query("players").collect();
-    const needsHost = existingPlayers.length === 0 || !gameState?.hostPlayerId;
-
     // Spawn player at a safe sidewalk location
     const spawnPoints = [
       { x: 150, y: 200 }, { x: 350, y: 200 }, { x: 550, y: 200 }, { x: 750, y: 200 },
@@ -52,28 +30,19 @@ export const spawnPlayer = mutation({
     
     const randomSpawn = spawnPoints[Math.floor(Math.random() * spawnPoints.length)];
     
-    // Players spawn as humans by default - no automatic zombie creation
-    const isFirstZombie = false;
-    
+    // Create player
     const playerId = await ctx.db.insert("players", {
       username,
       x: randomSpawn.x,
       y: randomSpawn.y,
       health: 100,
       lastActiveTime: Date.now(),
-      isZombie: isFirstZombie, // Players start as humans in lobby
+      isZombie: false, // Always spawn as human
       connectionId: connectionId,
     });
 
-    // Set this player as host if no host exists or no players exist
-    if (needsHost && gameState) {
-      await ctx.db.patch(gameState._id, {
-        hostPlayerId: playerId,
-      });
-    }
-
-    // Don't balance NPCs in lobby - only during gameplay
-    // await ctx.runMutation(internal.npcZombies.balanceNPCs, {});
+    // Join the lobby through game manager
+    await ctx.runMutation(internal.gameManager.joinLobby, { playerId });
 
     return playerId;
   },
@@ -89,60 +58,72 @@ export const updatePlayerPosition = mutation({
     const player = await ctx.db.get(playerId);
     if (!player) return;
 
-    // Check game state - only allow infections during "playing" state
+    // Get game state
     const gameState = await ctx.db
       .query("gameState")
       .withIndex("by_gameId", (q) => q.eq("gameId", "main"))
       .unique();
 
-    // Update position
+    // Update position and activity time
     await ctx.db.patch(playerId, {
       x,
       y,
       lastActiveTime: Date.now(),
     });
 
+    // Only process infections during "playing" state
+    if (gameState?.status !== "playing") {
+      return;
+    }
+
     // Check for infections during "playing" state only
-    if (gameState?.status === "playing") {
-      // Check for player-to-player zombie infections if this player is a zombie
-      if (player.isZombie === true) {
-        const allPlayers = await ctx.db.query("players").collect();
-        const humanPlayers = allPlayers.filter(p => p.isZombie !== true && p._id !== playerId);
+    if (player.isZombie === true) {
+      // Zombie player - check for infecting humans
+      const allPlayers = await ctx.db.query("players").collect();
+      const humanPlayers = allPlayers.filter(p => 
+        p.isZombie !== true && 
+        p._id !== playerId &&
+        Date.now() - p.lastActiveTime < 30000 // Only active players
+      );
+      
+      for (const human of humanPlayers) {
+        const distance = Math.sqrt(Math.pow(x - human.x, 2) + Math.pow(y - human.y, 2));
         
-        for (const human of humanPlayers) {
-          const distance = Math.sqrt(Math.pow(x - human.x, 2) + Math.pow(y - human.y, 2));
+        // Infection radius of 25 pixels
+        if (distance <= 25) {
+          await ctx.db.patch(human._id, {
+            isZombie: true,
+            health: 100, // Zombies have full health
+          });
           
-          // Infection radius of 25 pixels
-          if (distance <= 25) {
-            await ctx.db.patch(human._id, {
-              isZombie: true,
-              health: 100, // Zombies have full health
-            });
-            
-            // When a human gets infected, rebalance NPCs (one less human = 10 fewer NPCs needed)
-            await ctx.runMutation(internal.npcZombies.balanceNPCs, {});
-          }
+          // Update player counts and check win conditions
+          await ctx.runMutation(internal.gameManager.updatePlayerCounts, {});
+          
+          // Balance NPCs when human gets infected
+          await ctx.runMutation(internal.npcZombies.balanceNPCs, {});
+          break; // Only infect one human per update
         }
       }
+    } else {
+      // Human player - check for NPC infections
+      const npcs = await ctx.db.query("npcZombies").collect();
       
-      // Check for NPC-to-player infections (if this player is human)
-      if (player.isZombie !== true) {
-        const npcs = await ctx.db.query("npcZombies").collect();
+      for (const npc of npcs) {
+        const distance = Math.sqrt(Math.pow(x - npc.x, 2) + Math.pow(y - npc.y, 2));
         
-        for (const npc of npcs) {
-          const distance = Math.sqrt(Math.pow(x - npc.x, 2) + Math.pow(y - npc.y, 2));
+        // Infection radius of 20 pixels for NPCs
+        if (distance <= 20) {
+          await ctx.db.patch(playerId, {
+            isZombie: true,
+            health: 100, // Zombies have full health
+          });
           
-          // Infection radius of 20 pixels for NPCs
-          if (distance <= 20) {
-            await ctx.db.patch(playerId, {
-              isZombie: true,
-              health: 100, // Zombies have full health
-            });
-            
-            // When a human gets infected, rebalance NPCs
-            await ctx.runMutation(internal.npcZombies.balanceNPCs, {});
-            break; // Player can only be infected once
-          }
+          // Update player counts and check win conditions
+          await ctx.runMutation(internal.gameManager.updatePlayerCounts, {});
+          
+          // Balance NPCs when human gets infected
+          await ctx.runMutation(internal.npcZombies.balanceNPCs, {});
+          break; // Player can only be infected once
         }
       }
     }
@@ -152,7 +133,7 @@ export const updatePlayerPosition = mutation({
 export const getAllPlayers = query({
   args: {},
   handler: async (ctx) => {
-    // Get all players that have been active in the last 30 seconds (for real-time cleanup)
+    // Get all players that have been active in the last 30 seconds
     const thirtySecondsAgo = Date.now() - 30 * 1000;
     return await ctx.db
       .query("players")
@@ -171,57 +152,28 @@ export const cleanupDisconnectedPlayers = mutation({
       .withIndex("by_lastActiveTime", (q) => q.lt("lastActiveTime", thirtySecondsAgo))
       .collect();
       
-    let hostWasDeleted = false;
-    const gameState = await ctx.db
-      .query("gameState")
-      .withIndex("by_gameId", (q) => q.eq("gameId", "main"))
-      .unique();
-    
+    // Handle each disconnected player through game manager
     for (const player of disconnectedPlayers) {
-      // Check if we're deleting the current host
-      if (gameState?.hostPlayerId === player._id) {
-        hostWasDeleted = true;
-      }
+      await ctx.runMutation(internal.gameManager.leaveLobby, { playerId: player._id });
       await ctx.db.delete(player._id);
     }
     
-    // Reassign host if the current host was deleted
-    if (hostWasDeleted && gameState) {
-      const remainingPlayers = await ctx.db.query("players").collect();
-      if (remainingPlayers.length > 0) {
-        // Assign the first remaining player as the new host
-        await ctx.db.patch(gameState._id, {
-          hostPlayerId: remainingPlayers[0]._id,
-        });
-      } else {
-        // No players left, reset game state to lobby
-        await ctx.db.patch(gameState._id, {
-          hostPlayerId: undefined,
-          status: "lobby",
-          firstZombieSelected: false,
-          roundStartTime: undefined,
-        });
-      }
-    }
-    
-    // Rebalance NPCs after cleanup - only during gameplay
+    // Update player counts
     if (disconnectedPlayers.length > 0) {
+      await ctx.runMutation(internal.gameManager.updatePlayerCounts, {});
+      
+      // Rebalance NPCs if during gameplay
+      const gameState = await ctx.db
+        .query("gameState")
+        .withIndex("by_gameId", (q) => q.eq("gameId", "main"))
+        .unique();
+        
       if (gameState?.status === "playing") {
         await ctx.runMutation(internal.npcZombies.balanceNPCs, {});
       }
     }
     
     return disconnectedPlayers.length;
-  },
-});
-
-export const getGameState = query({
-  args: {},
-  handler: async (ctx) => {
-    return await ctx.db
-      .query("gameState")
-      .withIndex("by_gameId", (q) => q.eq("gameId", "main"))
-      .unique();
   },
 });
 
@@ -242,16 +194,17 @@ export const disconnectPlayer = mutation({
     playerId: v.id("players"),
   },
   handler: async (ctx, { playerId }) => {
+    await ctx.runMutation(internal.gameManager.leaveLobby, { playerId });
     await ctx.db.delete(playerId);
   },
 });
 
+// Legacy functions for backward compatibility - simplified versions
 export const startGame = mutation({
   args: {
     playerId: v.id("players"),
   },
   handler: async (ctx, { playerId }) => {
-    // Get game state
     const gameState = await ctx.db
       .query("gameState")
       .withIndex("by_gameId", (q) => q.eq("gameId", "main"))
@@ -261,46 +214,75 @@ export const startGame = mutation({
       throw new ConvexError("Game state not found");
     }
 
-    // Check if this player is the host
     if (gameState.hostPlayerId !== playerId) {
       throw new ConvexError("Only the host can start the game");
     }
 
-    // Check if game is in lobby state
     if (gameState.status !== "lobby") {
       throw new ConvexError("Game is not in lobby state");
     }
 
-    // Get all players to make first one a zombie
     const players = await ctx.db.query("players").collect();
-    if (players.length === 0) {
-      throw new ConvexError("No players found");
+    const activePlayers = players.filter(p => Date.now() - p.lastActiveTime < 30000);
+
+    if (activePlayers.length < 2) {
+      throw new ConvexError("Need at least 2 players to start");
     }
 
-    // Make the first player (host) a zombie
-    const hostPlayer = players.find(p => p._id === playerId);
-    if (hostPlayer) {
-      await ctx.db.patch(playerId, {
-        isZombie: true,
-        health: 100,
-      });
-    }
-
-    // Update game state to playing
+    // Start countdown
+    const countdownEnd = Date.now() + 10000; // 10 seconds
     await ctx.db.patch(gameState._id, {
-      status: "playing",
-      firstZombieSelected: true,
-      roundStartTime: Date.now(),
+      gameStartDelay: countdownEnd,
     });
 
-    // Now that game is playing, balance NPCs for the new zombie
-    await ctx.runMutation(internal.npcZombies.balanceNPCs, {});
+    // Schedule actual game start
+    await ctx.scheduler.runAt(countdownEnd, internal.gameManager.actuallyStartGame, {});
+
+    return { success: true, countdownEnd };
+  },
+});
+
+export const cancelGameStart = mutation({
+  args: {
+    playerId: v.id("players"),
+  },
+  handler: async (ctx, { playerId }) => {
+    const gameState = await ctx.db
+      .query("gameState")
+      .withIndex("by_gameId", (q) => q.eq("gameId", "main"))
+      .unique();
+
+    if (!gameState) {
+      throw new ConvexError("Game state not found");
+    }
+
+    if (gameState.hostPlayerId !== playerId) {
+      throw new ConvexError("Only the host can cancel game start");
+    }
+
+    if (!gameState.gameStartDelay) {
+      throw new ConvexError("No game start to cancel");
+    }
+
+    await ctx.db.patch(gameState._id, {
+      gameStartDelay: undefined,
+    });
 
     return { success: true };
   },
 });
 
-// Reset game to lobby state for testing
+export const getGameState = query({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db
+      .query("gameState")
+      .withIndex("by_gameId", (q) => q.eq("gameId", "main"))
+      .unique();
+  },
+});
+
+// For admin/testing - reset everything
 export const resetGameToLobby = mutation({
   args: {},
   handler: async (ctx) => {
@@ -316,14 +298,22 @@ export const resetGameToLobby = mutation({
       await ctx.db.delete(npc._id);
     }
 
-    // Reset or delete game state
+    // Reset game state
     const gameState = await ctx.db
       .query("gameState")
       .withIndex("by_gameId", (q) => q.eq("gameId", "main"))
       .unique();
 
     if (gameState) {
-      await ctx.db.delete(gameState._id);
+      await ctx.db.patch(gameState._id, {
+        status: "lobby",
+        hostPlayerId: undefined,
+        roundStartTime: undefined,
+        roundEndTime: undefined,
+        playerCount: 0,
+        zombieCount: 0,
+        gameStartDelay: undefined,
+      });
     }
 
     return { success: true };

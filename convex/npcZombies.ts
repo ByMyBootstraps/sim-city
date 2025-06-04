@@ -327,7 +327,7 @@ export const getAllNPCZombies = query({
 });
 
 // Clean up all NPCs (for testing/reset)
-export const clearAllNPCs = mutation({
+export const clearAllNPCs = internalMutation({
   args: {},
   handler: async (ctx) => {
     const npcs = await ctx.db.query("npcZombies").collect();

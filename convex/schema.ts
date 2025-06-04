@@ -27,11 +27,14 @@ export default defineSchema({
   }),
     
   gameState: defineTable({
-    gameId: v.string(),
+    gameId: v.string(), // Always "main" for single game instance
     status: v.union(v.literal("lobby"), v.literal("playing"), v.literal("ended")),
-    firstZombieSelected: v.boolean(),
-    roundStartTime: v.optional(v.number()),
-    hostPlayerId: v.optional(v.id("players")), // The first player who can start the game
+    hostPlayerId: v.optional(v.id("players")), // Current host who can control game
+    roundStartTime: v.optional(v.number()), // When current round started
+    roundEndTime: v.optional(v.number()), // When current round ended
     lastNPCUpdate: v.optional(v.number()), // Track last NPC update to prevent conflicts
+    playerCount: v.number(), // Current number of active players
+    zombieCount: v.number(), // Current number of zombies
+    gameStartDelay: v.optional(v.number()), // Countdown timer for game start
   }).index("by_gameId", ["gameId"]),
 });

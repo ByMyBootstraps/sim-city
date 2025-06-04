@@ -150,6 +150,7 @@ function GameView({ playerId, username }: { playerId: Id<"players">; username: s
   const cleanupDisconnected = useMutation(api.players.cleanupDisconnectedPlayers);
   const updateNPCs = useMutation(api.npcZombies.updateNPCZombies);
   const startGame = useMutation(api.players.startGame);
+  const cancelGameStart = useMutation(api.players.cancelGameStart);
   
   // Professional movement system state
   const keysRef = useRef<{[key: string]: boolean}>({});
@@ -441,14 +442,25 @@ function GameView({ playerId, username }: { playerId: Id<"players">; username: s
   // Handle lobby state
   if (gameState?.status === 'lobby') {
     const isHost = gameState.hostPlayerId === playerId;
+    const countdownActive = gameState.gameStartDelay && gameState.gameStartDelay > Date.now();
+    const countdownSeconds = countdownActive ? Math.ceil((gameState.gameStartDelay! - Date.now()) / 1000) : 0;
 
     const handleStartGame = async () => {
       setIsStarting(true);
       try {
         await startGame({ playerId });
+        setIsStarting(false);
       } catch (error) {
         alert(error instanceof Error ? error.message : 'Failed to start game');
         setIsStarting(false);
+      }
+    };
+
+    const handleCancelStart = async () => {
+      try {
+        await cancelGameStart({ playerId });
+      } catch (error) {
+        alert(error instanceof Error ? error.message : 'Failed to cancel');
       }
     };
 
@@ -456,45 +468,102 @@ function GameView({ playerId, username }: { playerId: Id<"players">; username: s
       <div className="text-center">
         <h1 className="mb-8">🧟 Zombie City Survival - Lobby</h1>
         <div className="mb-6">
-          <h2 className="text-xl mb-4">Waiting for game to start...</h2>
-          <div className="mb-4">
-            <span className="font-semibold">Players in lobby:</span>
-            <div className="mt-2">
-              {players.map((player) => (
-                <div key={player._id} className={`inline-block px-2 py-1 m-1 rounded ${
-                  player._id === gameState.hostPlayerId ? 'bg-primary text-primary-content' : 'bg-base-200'
-                }`}>
-                  {player.username} {player._id === gameState.hostPlayerId && '(Host)'}
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="text-sm opacity-70 mb-6">
-            {players.length}/10 players joined
-          </div>
-          
-          {isHost ? (
+          {countdownActive ? (
             <div>
-              <p className="mb-4">You are the host. You can start the game when ready!</p>
-              <button 
-                className="btn btn-primary btn-lg"
-                onClick={() => void handleStartGame()}
-                disabled={isStarting}
-              >
-                {isStarting ? 'Starting...' : 'Start Game'}
-              </button>
-              <p className="text-xs mt-2 opacity-60">
-                You will become the first zombie when the game starts
-              </p>
+              <h2 className="text-3xl mb-4 text-primary">Game Starting in {countdownSeconds}...</h2>
+              <p className="text-lg mb-4">Get ready for the zombie apocalypse!</p>
+              {isHost && (
+                <button 
+                  className="btn btn-secondary"
+                  onClick={() => void handleCancelStart()}
+                >
+                  Cancel Start
+                </button>
+              )}
             </div>
           ) : (
             <div>
-              <p className="text-lg">Waiting for host to start the game...</p>
-              <p className="text-sm opacity-70 mt-2">
-                The host ({players.find(p => p._id === gameState.hostPlayerId)?.username}) will start when ready
-              </p>
+              <h2 className="text-xl mb-4">Waiting for game to start...</h2>
+              <div className="mb-4">
+                <span className="font-semibold">Players in lobby:</span>
+                <div className="mt-2">
+                  {players.map((player) => (
+                    <div key={player._id} className={`inline-block px-2 py-1 m-1 rounded ${
+                      player._id === gameState.hostPlayerId ? 'bg-primary text-primary-content' : 'bg-base-200'
+                    }`}>
+                      {player.username} {player._id === gameState.hostPlayerId && '(Host)'}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="text-sm opacity-70 mb-6">
+                {players.length}/{gameState.playerCount || 20} players joined
+              </div>
+              
+              {isHost ? (
+                <div>
+                  <p className="mb-4">You are the host. You can start the game when ready!</p>
+                  <button 
+                    className="btn btn-primary btn-lg"
+                    onClick={() => void handleStartGame()}
+                    disabled={isStarting || players.length < 2}
+                  >
+                    {isStarting ? 'Starting...' : 'Start Game'}
+                  </button>
+                  {players.length < 2 && (
+                    <p className="text-sm mt-2 text-warning">Need at least 2 players to start</p>
+                  )}
+                  <p className="text-xs mt-2 opacity-60">
+                    A random player will become the first zombie when the game starts
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-lg">Waiting for host to start the game...</p>
+                  <p className="text-sm opacity-70 mt-2">
+                    The host ({players.find(p => p._id === gameState.hostPlayerId)?.username}) will start when ready
+                  </p>
+                </div>
+              )}
             </div>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  // Handle game ended state
+  if (gameState?.status === 'ended') {
+    const zombies = players.filter(p => p.isZombie === true);
+    const humans = players.filter(p => p.isZombie !== true);
+    
+    return (
+      <div className="text-center">
+        <h1 className="mb-8">🧟 Game Over!</h1>
+        <div className="mb-6">
+          <h2 className="text-2xl mb-4">
+            {humans.length === 0 ? '🧟 Zombies Win!' : '🏃 Humans Survived!'}
+          </h2>
+          
+          <div className="mb-6">
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold mb-2">Final Results:</h3>
+              <div className="grid grid-cols-2 gap-4 max-w-md mx-auto">
+                <div className="bg-error text-error-content p-3 rounded">
+                  <div className="font-bold">Zombies</div>
+                  <div>{zombies.length} players</div>
+                </div>
+                <div className="bg-success text-success-content p-3 rounded">
+                  <div className="font-bold">Survivors</div>
+                  <div>{humans.length} players</div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="text-sm opacity-70">
+              Returning to lobby in a few seconds...
+            </div>
+          </div>
         </div>
       </div>
     );
