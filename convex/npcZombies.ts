@@ -41,7 +41,7 @@ export const spawnNPCZombies = internalMutation({
   },
 });
 
-// Professional NPC hunting system with pathfinding
+// Advanced NPC AI with collision detection, smooth movement, and intelligent behavior
 export const updateNPCZombies = mutation({
   args: {},
   handler: async (ctx) => {
@@ -50,77 +50,120 @@ export const updateNPCZombies = mutation({
     const humanPlayers = players.filter(p => p.isZombie !== true);
     const now = Date.now();
     
-    // Movement constants for hunting behavior
-    const MOVEMENT_SPEED = 80; // pixels per second - hunting speed
-    const TARGET_RADIUS = 8; // how close to target before picking new one
-    const DETECTION_RANGE = 150; // how far NPCs can "see" humans
-    const RETARGET_INTERVAL = 2000; // retarget every 2 seconds
+    // Movement constants for professional behavior
+    const HUNTING_SPEED = 90; // pixels per second when chasing humans
+    const MEANDER_SPEED = 45; // pixels per second when wandering
+    const TARGET_RADIUS = 6; // how close to target before picking new one
+    const DETECTION_RANGE = 120; // how far NPCs can "see" humans
+    const RETARGET_INTERVAL = 1500; // retarget every 1.5 seconds
+    const COLLISION_RADIUS = 12; // collision detection radius for NPCs
     
-    // Navigation waypoints for pathfinding around buildings
-    const navigationNodes = [
-      // Horizontal road nodes
-      { x: 50, y: 200 }, { x: 120, y: 200 }, { x: 180, y: 200 }, { x: 260, y: 200 }, 
-      { x: 320, y: 200 }, { x: 380, y: 200 }, { x: 460, y: 200 }, { x: 520, y: 200 },
-      { x: 580, y: 200 }, { x: 660, y: 200 }, { x: 720, y: 200 }, { x: 780, y: 200 },
+    // Collision detection function (inline copy from cityLayout.ts)
+    function checkCollision(x: number, y: number, radius: number = COLLISION_RADIUS): boolean {
+      // Building collision data (copy from cityLayout.ts)
+      const buildings = [
+        { x: 20, y: 20, width: 150, height: 120 }, // City Hall
+        { x: 260, y: 30, width: 100, height: 110 }, // Police Station
+        { x: 460, y: 40, width: 110, height: 100 }, // Fire Department
+        { x: 660, y: 25, width: 120, height: 115 }, // Hospital
+        { x: 30, y: 250, width: 80, height: 90 }, // Apartment A
+        { x: 120, y: 260, width: 60, height: 80 }, // House 1
+        { x: 260, y: 240, width: 70, height: 100 }, // House 2
+        { x: 340, y: 250, width: 40, height: 90 }, // House 3
+        { x: 460, y: 240, width: 110, height: 110 }, // Shopping Mall
+        { x: 660, y: 250, width: 60, height: 80 }, // Coffee Shop
+        { x: 730, y: 260, width: 50, height: 70 }, // Bakery
+        { x: 40, y: 450, width: 130, height: 130 }, // Factory
+        { x: 260, y: 460, width: 100, height: 110 }, // Warehouse
+        { x: 460, y: 450, width: 110, height: 120 }, // Power Plant
+        { x: 660, y: 470, width: 120, height: 100 }, // Recycling Center
+      ];
       
-      { x: 50, y: 400 }, { x: 120, y: 400 }, { x: 180, y: 400 }, { x: 260, y: 400 }, 
-      { x: 320, y: 400 }, { x: 380, y: 400 }, { x: 460, y: 400 }, { x: 520, y: 400 },
-      { x: 580, y: 400 }, { x: 660, y: 400 }, { x: 720, y: 400 }, { x: 780, y: 400 },
+      for (const building of buildings) {
+        if (x - radius < building.x + building.width &&
+            x + radius > building.x &&
+            y - radius < building.y + building.height &&
+            y + radius > building.y) {
+          return true;
+        }
+      }
+      return false;
+    }
+    
+    // Smooth meandering waypoints for natural wandering behavior
+    const meanderPoints = [
+      // Main road patrol points
+      { x: 100, y: 190 }, { x: 180, y: 210 }, { x: 280, y: 190 }, { x: 380, y: 210 },
+      { x: 480, y: 190 }, { x: 580, y: 210 }, { x: 680, y: 190 }, { x: 750, y: 210 },
       
-      // Vertical road nodes
-      { x: 220, y: 30 }, { x: 220, y: 80 }, { x: 220, y: 130 }, { x: 220, y: 170 },
-      { x: 220, y: 230 }, { x: 220, y: 280 }, { x: 220, y: 320 }, { x: 220, y: 370 },
-      { x: 220, y: 430 }, { x: 220, y: 480 }, { x: 220, y: 530 }, { x: 220, y: 580 },
+      { x: 100, y: 390 }, { x: 180, y: 410 }, { x: 280, y: 390 }, { x: 380, y: 410 },
+      { x: 480, y: 390 }, { x: 580, y: 410 }, { x: 680, y: 390 }, { x: 750, y: 410 },
       
-      { x: 420, y: 30 }, { x: 420, y: 80 }, { x: 420, y: 130 }, { x: 420, y: 170 },
-      { x: 420, y: 230 }, { x: 420, y: 280 }, { x: 420, y: 320 }, { x: 420, y: 370 },
-      { x: 420, y: 430 }, { x: 420, y: 480 }, { x: 420, y: 530 }, { x: 420, y: 580 },
+      // Vertical patrol routes
+      { x: 210, y: 50 }, { x: 230, y: 100 }, { x: 210, y: 150 }, { x: 230, y: 250 },
+      { x: 210, y: 300 }, { x: 230, y: 350 }, { x: 210, y: 450 }, { x: 230, y: 520 },
       
-      { x: 620, y: 30 }, { x: 620, y: 80 }, { x: 620, y: 130 }, { x: 620, y: 170 },
-      { x: 620, y: 230 }, { x: 620, y: 280 }, { x: 620, y: 320 }, { x: 620, y: 370 },
-      { x: 620, y: 430 }, { x: 620, y: 480 }, { x: 620, y: 530 }, { x: 620, y: 580 },
+      { x: 410, y: 50 }, { x: 430, y: 100 }, { x: 410, y: 150 }, { x: 430, y: 250 },
+      { x: 410, y: 300 }, { x: 430, y: 350 }, { x: 410, y: 450 }, { x: 430, y: 520 },
       
-      // Park and intersection nodes
-      { x: 90, y: 340 }, { x: 320, y: 360 }, { x: 520, y: 340 }, { x: 715, y: 350 },
-      { x: 220, y: 200 }, { x: 420, y: 200 }, { x: 620, y: 200 }, // Road intersections
-      { x: 220, y: 400 }, { x: 420, y: 400 }, { x: 620, y: 400 }, // Road intersections
+      { x: 610, y: 50 }, { x: 630, y: 100 }, { x: 610, y: 150 }, { x: 630, y: 250 },
+      { x: 610, y: 300 }, { x: 630, y: 350 }, { x: 610, y: 450 }, { x: 630, y: 520 },
+      
+      // Park and open area points for meandering
+      { x: 80, y: 330 }, { x: 110, y: 350 }, { x: 140, y: 330 },
+      { x: 300, y: 350 }, { x: 330, y: 370 }, { x: 360, y: 350 },
+      { x: 500, y: 330 }, { x: 530, y: 350 }, { x: 560, y: 330 },
+      { x: 700, y: 340 }, { x: 730, y: 360 }, { x: 760, y: 340 },
     ];
     
-    // Simple pathfinding: find nearest navigation node to target
-    function findPathToTarget(startX: number, startY: number, targetX: number, targetY: number) {
-      // Find closest navigation node to current position
-      let closestToStart = navigationNodes[0];
-      let minDistToStart = Infinity;
+    // Advanced pathfinding with collision avoidance
+    function findSafePath(startX: number, startY: number, targetX: number, targetY: number, isHunting: boolean = false) {
+      // Try direct path first if no collision
+      const steps = 8;
+      let directPathClear = true;
       
-      // Find closest navigation node to target
-      let closestToTarget = navigationNodes[0];
-      let minDistToTarget = Infinity;
-      
-      for (const node of navigationNodes) {
-        const distToStart = Math.sqrt(Math.pow(node.x - startX, 2) + Math.pow(node.y - startY, 2));
-        const distToTarget = Math.sqrt(Math.pow(node.x - targetX, 2) + Math.pow(node.y - targetY, 2));
-        
-        if (distToStart < minDistToStart) {
-          minDistToStart = distToStart;
-          closestToStart = node;
-        }
-        
-        if (distToTarget < minDistToTarget) {
-          minDistToTarget = distToTarget;
-          closestToTarget = node;
+      for (let i = 1; i <= steps; i++) {
+        const testX = startX + (targetX - startX) * (i / steps);
+        const testY = startY + (targetY - startY) * (i / steps);
+        if (checkCollision(testX, testY)) {
+          directPathClear = false;
+          break;
         }
       }
       
-      // Simple pathfinding: go to intermediate waypoint if needed
-      const directDist = Math.sqrt(Math.pow(targetX - startX, 2) + Math.pow(targetY - startY, 2));
-      const waypointDist = Math.sqrt(Math.pow(closestToTarget.x - startX, 2) + Math.pow(closestToTarget.y - startY, 2));
-      
-      // If waypoint is closer than direct path or we're far from target, use waypoint
-      if (waypointDist < directDist * 0.8 || directDist > DETECTION_RANGE) {
-        return closestToTarget;
-      } else {
+      if (directPathClear) {
         return { x: targetX, y: targetY };
       }
+      
+      // If hunting, find closest clear waypoint towards target
+      if (isHunting) {
+        let bestPoint = meanderPoints[0];
+        let bestScore = Infinity;
+        
+        for (const point of meanderPoints) {
+          if (!checkCollision(point.x, point.y)) {
+            const distToPoint = Math.sqrt(Math.pow(point.x - startX, 2) + Math.pow(point.y - startY, 2));
+            const distToTarget = Math.sqrt(Math.pow(point.x - targetX, 2) + Math.pow(point.y - targetY, 2));
+            const score = distToPoint + distToTarget * 0.5; // Prefer points closer to target
+            
+            if (score < bestScore) {
+              bestScore = score;
+              bestPoint = point;
+            }
+          }
+        }
+        return bestPoint;
+      }
+      
+      // For meandering, just find any nearby safe point
+      const nearbyPoints = meanderPoints.filter(point => {
+        const dist = Math.sqrt(Math.pow(point.x - startX, 2) + Math.pow(point.y - startY, 2));
+        return dist <= 200 && !checkCollision(point.x, point.y);
+      });
+      
+      return nearbyPoints.length > 0 ? 
+        nearbyPoints[Math.floor(Math.random() * nearbyPoints.length)] : 
+        { x: startX, y: startY }; // Stay in place if no safe points
     }
     
     for (const npc of npcs) {
@@ -132,64 +175,109 @@ export const updateNPCZombies = mutation({
       let newTargetY = npc.targetY;
       let newWanderCooldown = npc.wanderCooldown;
       
-      // Check if we need to retarget
-      const needsRetarget = now >= npc.wanderCooldown;
+      // Find nearest human for detection
+      let nearestHuman = null;
+      let nearestDistance = Infinity;
       
-      if (needsRetarget) {
-        // Find nearest human player
-        let nearestHuman = null;
-        let nearestDistance = Infinity;
-        
-        for (const human of humanPlayers) {
-          const distance = Math.sqrt(Math.pow(human.x - npc.x, 2) + Math.pow(human.y - npc.y, 2));
-          if (distance < nearestDistance && distance <= DETECTION_RANGE) {
-            nearestDistance = distance;
-            nearestHuman = human;
-          }
+      for (const human of humanPlayers) {
+        const distance = Math.sqrt(Math.pow(human.x - npc.x, 2) + Math.pow(human.y - npc.y, 2));
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nearestHuman = human;
         }
-        
-        if (nearestHuman) {
-          // Hunt the nearest human using pathfinding
-          const pathTarget = findPathToTarget(npc.x, npc.y, nearestHuman.x, nearestHuman.y);
+      }
+      
+      const isHunting = nearestHuman && nearestDistance <= DETECTION_RANGE;
+      const needsRetarget = now >= npc.wanderCooldown || 
+                           Math.sqrt(Math.pow(npc.targetX - npc.x, 2) + Math.pow(npc.targetY - npc.y, 2)) < TARGET_RADIUS;
+      
+      // Determine behavior and target
+      if (needsRetarget) {
+        if (isHunting && nearestHuman) {
+          // Hunt mode: path towards human with collision avoidance
+          const pathTarget = findSafePath(npc.x, npc.y, nearestHuman.x, nearestHuman.y, true);
           newTargetX = pathTarget.x;
           newTargetY = pathTarget.y;
+          newWanderCooldown = now + RETARGET_INTERVAL;
         } else {
-          // No humans in range, wander to a random navigation node
-          const randomNode = navigationNodes[Math.floor(Math.random() * navigationNodes.length)];
-          newTargetX = randomNode.x + (Math.random() - 0.5) * 40;
-          newTargetY = randomNode.y + (Math.random() - 0.5) * 40;
+          // Meander mode: smooth wandering with longer intervals
+          const meanderTarget = findSafePath(npc.x, npc.y, 
+            meanderPoints[Math.floor(Math.random() * meanderPoints.length)].x,
+            meanderPoints[Math.floor(Math.random() * meanderPoints.length)].y,
+            false);
+          newTargetX = meanderTarget.x + (Math.random() - 0.5) * 30; // Add some randomness
+          newTargetY = meanderTarget.y + (Math.random() - 0.5) * 30;
+          newWanderCooldown = now + RETARGET_INTERVAL * 2; // Longer intervals for meandering
         }
         
-        // Ensure target is within bounds
+        // Ensure target is within bounds and safe
         newTargetX = Math.max(25, Math.min(775, newTargetX));
         newTargetY = Math.max(25, Math.min(575, newTargetY));
         
-        newWanderCooldown = now + RETARGET_INTERVAL;
+        // Final safety check for target
+        if (checkCollision(newTargetX, newTargetY)) {
+          // If target is unsafe, stay near current position
+          newTargetX = npc.x + (Math.random() - 0.5) * 40;
+          newTargetY = npc.y + (Math.random() - 0.5) * 40;
+        }
       }
       
-      // Move towards current target
+      // Smooth movement towards target
       const dx = newTargetX - npc.x;
       const dy = newTargetY - npc.y;
       const distanceToTarget = Math.sqrt(dx * dx + dy * dy);
       
       if (distanceToTarget > 0.5) {
+        // Choose speed based on behavior
+        const currentSpeed = isHunting ? HUNTING_SPEED : MEANDER_SPEED;
+        
         // Normalize direction vector
         const dirX = dx / distanceToTarget;
         const dirY = dy / distanceToTarget;
         
-        // Calculate movement for this frame
-        const moveDistance = MOVEMENT_SPEED * deltaTime;
+        // Calculate proposed movement
+        const moveDistance = currentSpeed * deltaTime;
         const actualMoveDistance = Math.min(moveDistance, distanceToTarget);
         
-        newX = npc.x + dirX * actualMoveDistance;
-        newY = npc.y + dirY * actualMoveDistance;
+        const proposedX = npc.x + dirX * actualMoveDistance;
+        const proposedY = npc.y + dirY * actualMoveDistance;
+        
+        // Check collision for proposed movement
+        if (!checkCollision(proposedX, proposedY)) {
+          newX = proposedX;
+          newY = proposedY;
+        } else {
+          // Try alternative movements if blocked
+          const alternativeAngles = [Math.PI/4, -Math.PI/4, Math.PI/2, -Math.PI/2];
+          let foundAlternative = false;
+          
+          for (const angle of alternativeAngles) {
+            const altDirX = Math.cos(Math.atan2(dirY, dirX) + angle);
+            const altDirY = Math.sin(Math.atan2(dirY, dirX) + angle);
+            const altX = npc.x + altDirX * actualMoveDistance * 0.7;
+            const altY = npc.y + altDirY * actualMoveDistance * 0.7;
+            
+            if (!checkCollision(altX, altY)) {
+              newX = altX;
+              newY = altY;
+              foundAlternative = true;
+              break;
+            }
+          }
+          
+          // If no alternative found, stay in place
+          if (!foundAlternative) {
+            newX = npc.x;
+            newY = npc.y;
+          }
+        }
         
         // Keep within game bounds
-        newX = Math.max(25, Math.min(775, newX));
-        newY = Math.max(25, Math.min(575, newY));
+        newX = Math.max(COLLISION_RADIUS, Math.min(800 - COLLISION_RADIUS, newX));
+        newY = Math.max(COLLISION_RADIUS, Math.min(600 - COLLISION_RADIUS, newY));
       }
       
-      // Check for NPC infections - NPCs can zombify humans they touch
+      // Check for NPC infections with improved collision detection
       for (const human of humanPlayers) {
         const distance = Math.sqrt(Math.pow(newX - human.x, 2) + Math.pow(newY - human.y, 2));
         
@@ -252,7 +340,7 @@ export const balanceNPCs = internalMutation({
     
     // Get current NPC count
     const currentNPCs = await ctx.db.query("npcZombies").collect();
-    const targetNPCCount = humanCount * 10;
+    const targetNPCCount = humanCount * 3;
     
     if (currentNPCs.length < targetNPCCount) {
       // Spawn more NPCs directly
