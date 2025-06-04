@@ -4,6 +4,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { api } from "../../convex/_generated/api";
+import { Id } from "../../convex/_generated/dataModel";
 import { cityLayout, checkCollision } from "@/cityLayout";
 
 const playersQueryOptions = convexQuery(api.players.getAllPlayers, {});
@@ -34,7 +35,7 @@ export const Route = createFileRoute("/")({
 function HomePage() {
   const [localState, setLocalState] = useState<'username' | 'joined'>('username');
   const [username, setUsername] = useState('');
-  const [currentPlayerId, setCurrentPlayerId] = useState<string | null>(null);
+  const [currentPlayerId, setCurrentPlayerId] = useState<Id<"players"> | null>(null);
 
   if (localState === 'username') {
     return <UsernameForm 
@@ -57,7 +58,7 @@ function UsernameForm({
 }: { 
   username: string; 
   setUsername: (name: string) => void;
-  onJoin: (playerId: string) => void;
+  onJoin: (playerId: Id<"players">) => void;
 }) {
   const spawnPlayer = useMutation(api.players.spawnPlayer);
   const resetGame = useMutation(api.players.resetGameToLobby);
@@ -140,7 +141,7 @@ function UsernameForm({
   );
 }
 
-function GameView({ playerId, username }: { playerId: string; username: string }) {
+function GameView({ playerId, username }: { playerId: Id<"players">; username: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { data: players } = useSuspenseQuery(playersQueryOptions);
   const { data: gameState } = useSuspenseQuery(gameStateQueryOptions);
