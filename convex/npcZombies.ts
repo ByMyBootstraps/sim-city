@@ -41,64 +41,89 @@ export const spawnNPCZombies = internalMutation({
   },
 });
 
-// Update NPC positions and AI
+// Professional NPC movement system - completely rewritten from scratch
 export const updateNPCZombies = mutation({
   args: {},
   handler: async (ctx) => {
     const npcs = await ctx.db.query("npcZombies").collect();
     const now = Date.now();
     
+    // Movement constants for professional behavior
+    const MOVEMENT_SPEED = 60; // pixels per second - slower than players
+    const TARGET_RADIUS = 8; // how close to target before picking new one
+    const MIN_WANDER_TIME = 1500; // minimum time before changing direction (ms)
+    const MAX_WANDER_TIME = 4000; // maximum time before changing direction (ms)
+    
+    // Pre-defined waypoints for natural movement
+    const waypoints = [
+      // Horizontal road waypoints
+      { x: 100, y: 200 }, { x: 250, y: 200 }, { x: 350, y: 200 }, { x: 450, y: 200 }, 
+      { x: 550, y: 200 }, { x: 650, y: 200 }, { x: 750, y: 200 },
+      { x: 100, y: 400 }, { x: 250, y: 400 }, { x: 350, y: 400 }, { x: 450, y: 400 }, 
+      { x: 550, y: 400 }, { x: 650, y: 400 }, { x: 750, y: 400 },
+      
+      // Vertical road waypoints
+      { x: 220, y: 50 }, { x: 220, y: 150 }, { x: 220, y: 250 }, { x: 220, y: 350 }, { x: 220, y: 450 }, { x: 220, y: 550 },
+      { x: 420, y: 50 }, { x: 420, y: 150 }, { x: 420, y: 250 }, { x: 420, y: 350 }, { x: 420, y: 450 }, { x: 420, y: 550 },
+      { x: 620, y: 50 }, { x: 620, y: 150 }, { x: 620, y: 250 }, { x: 620, y: 350 }, { x: 620, y: 450 }, { x: 620, y: 550 },
+      
+      // Park and open area waypoints
+      { x: 90, y: 340 }, { x: 320, y: 360 }, { x: 520, y: 340 }, { x: 715, y: 350 },
+    ];
+    
     for (const npc of npcs) {
-      const deltaTime = (now - npc.lastMoveTime) / 1000; // Convert to seconds
+      const deltaTime = Math.min((now - npc.lastMoveTime) / 1000, 0.1); // Cap delta time to prevent large jumps
+      
+      // Calculate distance to current target
+      const dx = npc.targetX - npc.x;
+      const dy = npc.targetY - npc.y;
+      const distanceToTarget = Math.sqrt(dx * dx + dy * dy);
+      
       let newX = npc.x;
       let newY = npc.y;
       let newTargetX = npc.targetX;
       let newTargetY = npc.targetY;
       let newWanderCooldown = npc.wanderCooldown;
       
-      // Check if NPC needs a new target (reached current target or cooldown expired)
-      const distanceToTarget = Math.sqrt(
-        Math.pow(npc.x - npc.targetX, 2) + Math.pow(npc.y - npc.targetY, 2)
-      );
+      // Check if we need a new target
+      const needsNewTarget = distanceToTarget < TARGET_RADIUS || now >= npc.wanderCooldown;
       
-      if (distanceToTarget < 5 || now > npc.wanderCooldown) {
-        // Pick targets that prefer roads and sidewalks
-        const roadTargets = [
-          { x: 150, y: 200 }, { x: 350, y: 200 }, { x: 550, y: 200 }, { x: 750, y: 200 },
-          { x: 150, y: 400 }, { x: 350, y: 400 }, { x: 550, y: 400 }, { x: 750, y: 400 },
-          { x: 220, y: 100 }, { x: 220, y: 300 }, { x: 220, y: 500 },
-          { x: 420, y: 100 }, { x: 420, y: 300 }, { x: 420, y: 500 },
-          { x: 620, y: 100 }, { x: 620, y: 300 }, { x: 620, y: 500 },
-        ];
+      if (needsNewTarget) {
+        // Pick a new waypoint target
+        const target = waypoints[Math.floor(Math.random() * waypoints.length)];
         
-        if (Math.random() < 0.7) {
-          // 70% chance to target roads/sidewalks
-          const target = roadTargets[Math.floor(Math.random() * roadTargets.length)];
-          newTargetX = target.x + (Math.random() - 0.5) * 60;
-          newTargetY = target.y + (Math.random() - 0.5) * 60;
-        } else {
-          // 30% chance for random wandering
-          newTargetX = 50 + Math.random() * 700;
-          newTargetY = 50 + Math.random() * 500;
-        }
+        // Add some randomization around the waypoint
+        const randomOffset = 30;
+        newTargetX = target.x + (Math.random() - 0.5) * randomOffset;
+        newTargetY = target.y + (Math.random() - 0.5) * randomOffset;
         
-        newWanderCooldown = now + 2000 + Math.random() * 4000; // 2-6 seconds until next wander
+        // Ensure target is within bounds
+        newTargetX = Math.max(25, Math.min(775, newTargetX));
+        newTargetY = Math.max(25, Math.min(575, newTargetY));
+        
+        // Set new wander cooldown
+        newWanderCooldown = now + MIN_WANDER_TIME + Math.random() * (MAX_WANDER_TIME - MIN_WANDER_TIME);
       }
       
-      // Move towards target
-      if (distanceToTarget > 1) {
-        const directionX = (npc.targetX - npc.x) / distanceToTarget;
-        const directionY = (npc.targetY - npc.y) / distanceToTarget;
+      // Move towards target with smooth interpolation
+      if (distanceToTarget > 0.5) {
+        // Normalize direction vector
+        const dirX = dx / distanceToTarget;
+        const dirY = dy / distanceToTarget;
         
-        newX = npc.x + directionX * npc.speed * deltaTime;
-        newY = npc.y + directionY * npc.speed * deltaTime;
+        // Calculate movement for this frame
+        const moveDistance = MOVEMENT_SPEED * deltaTime;
+        const actualMoveDistance = Math.min(moveDistance, distanceToTarget);
         
-        // Keep within bounds
-        newX = Math.max(20, Math.min(780, newX));
-        newY = Math.max(20, Math.min(580, newY));
+        newX = npc.x + dirX * actualMoveDistance;
+        newY = npc.y + dirY * actualMoveDistance;
+        
+        // Keep within game bounds with padding
+        newX = Math.max(25, Math.min(775, newX));
+        newY = Math.max(25, Math.min(575, newY));
       }
       
-      // Update NPC position
+      // Update NPC with new position and state
       await ctx.db.patch(npc._id, {
         x: newX,
         y: newY,

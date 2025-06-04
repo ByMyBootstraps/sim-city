@@ -44,10 +44,8 @@ export const spawnPlayer = mutation({
     
     const randomSpawn = spawnPoints[Math.floor(Math.random() * spawnPoints.length)];
     
-    // Count current active players to determine if this should be the first zombie
-    const currentPlayers = await ctx.db.query("players").collect();
-    const activeZombies = currentPlayers.filter(p => p.isZombie === true);
-    const isFirstZombie = activeZombies.length === 0; // First player when no zombies exist
+    // Players spawn as humans by default - no automatic zombie creation
+    const isFirstZombie = false;
     
     const playerId = await ctx.db.insert("players", {
       username,
