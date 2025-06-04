@@ -8,12 +8,14 @@ import { cityLayout, checkCollision, getValidSpawnPoints } from "@/cityLayout";
 
 const playersQueryOptions = convexQuery(api.players.getAllPlayers, {});
 const gameStateQueryOptions = convexQuery(api.players.getGameState, {});
+const npcZombiesQueryOptions = convexQuery(api.npcZombies.getAllNPCZombies, {});
 
 export const Route = createFileRoute("/")({
   loader: async ({ context: { queryClient } }) => {
     await Promise.all([
       queryClient.ensureQueryData(playersQueryOptions),
       queryClient.ensureQueryData(gameStateQueryOptions),
+      queryClient.ensureQueryData(npcZombiesQueryOptions),
     ]);
   },
   component: HomePage,
@@ -108,8 +110,10 @@ function GameView({ playerId, username }: { playerId: string; username: string }
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { data: players } = useSuspenseQuery(playersQueryOptions);
   const { data: gameState } = useSuspenseQuery(gameStateQueryOptions);
+  const { data: npcZombies } = useSuspenseQuery(npcZombiesQueryOptions);
   const updatePosition = useMutation(api.players.updatePlayerPosition);
   const cleanupDisconnected = useMutation(api.players.cleanupDisconnectedPlayers);
+  const runNPCAI = useMutation(api.npcZombies.runNPCAI);
   
   // Professional movement system state
   const keysRef = useRef<{[key: string]: boolean}>({});
@@ -329,21 +333,40 @@ function GameView({ playerId, username }: { playerId: string; username: string }
         }
       });
 
+      // Draw NPC zombies (smaller, gray)
+      npcZombies.forEach(npc => {
+        ctx.fillStyle = '#8B4513'; // Brown color for NPCs
+        ctx.fillRect(npc.x - 6, npc.y - 6, 12, 12); // Smaller than players
+        
+        // Draw smaller zombie indicator
+        ctx.fillStyle = '#000000';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('🧟', npc.x, npc.y + 3);
+      });
+
       requestAnimationFrame(render);
     };
 
     render();
-  }, [players, playerId]);
+  }, [players, playerId, npcZombies]);
 
 
-  // Cleanup disconnected players periodically
+  // Cleanup disconnected players and run NPC AI periodically
   useEffect(() => {
     const cleanup = setInterval(() => {
       void cleanupDisconnected();
     }, 10000); // Clean up every 10 seconds
 
-    return () => clearInterval(cleanup);
-  }, [cleanupDisconnected]);
+    const npcAI = setInterval(() => {
+      void runNPCAI();
+    }, 100); // Run NPC AI every 100ms for smooth movement
+
+    return () => {
+      clearInterval(cleanup);
+      clearInterval(npcAI);
+    };
+  }, [cleanupDisconnected, runNPCAI]);
 
   if (!currentPlayer) {
     return <div className="text-center">Loading...</div>;
@@ -394,7 +417,7 @@ function GameView({ playerId, username }: { playerId: string; username: string }
       
       <div className="flex justify-between items-center mb-2">
         <div className="text-sm">
-          🧟 Zombies: {zombiePlayers.length} | 👤 Humans: {humanPlayers.length}
+          🧟 Player Zombies: {zombiePlayers.length} | 👤 Humans: {humanPlayers.length} | 🧟‍♂️ NPC Zombies: {npcZombies.length}
         </div>
         <div className="text-sm opacity-70">
           Total Players: {players.length}/15
@@ -414,8 +437,8 @@ function GameView({ playerId, username }: { playerId: string; username: string }
         Smooth movement: Hold WASD or arrow keys (diagonal movement supported)
         <br />
         {currentPlayer.isZombie === true ? 
-          'Touch humans to infect them. More zombies = slower movement!' : 
-          'Avoid zombies to survive. They get slower as their numbers grow.'}
+          'Touch humans to infect them. Each infection spawns 10 NPC zombies!' : 
+          'Avoid player zombies to survive. NPCs roam the city (10 per human player).'}
       </div>
     </div>
   );

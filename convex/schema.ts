@@ -16,6 +16,16 @@ export default defineSchema({
     .index("by_connectionId", ["connectionId"])
     .index("by_isZombie", ["isZombie"]),
     
+  npcZombies: defineTable({
+    x: v.number(),
+    y: v.number(),
+    targetX: v.number(),
+    targetY: v.number(),
+    speed: v.number(),
+    lastMoveTime: v.number(),
+    wanderCooldown: v.number(),
+  }),
+    
   gameState: defineTable({
     gameId: v.string(),
     status: v.union(v.literal("waiting"), v.literal("playing"), v.literal("ended")),

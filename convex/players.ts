@@ -68,6 +68,9 @@ export const spawnPlayer = mutation({
       });
     }
 
+    // Balance NPCs after player spawn
+    await ctx.runMutation(internal.npcZombies.balanceNPCs, {});
+
     return playerId;
   },
 });
@@ -103,6 +106,9 @@ export const updatePlayerPosition = mutation({
             isZombie: true,
             health: 100, // Zombies have full health
           });
+          
+          // Spawn 10 NPC zombies when a human gets infected
+          await ctx.runMutation(internal.npcZombies.spawnNPCZombies, { count: 10 });
         }
       }
     }
@@ -133,6 +139,11 @@ export const cleanupDisconnectedPlayers = mutation({
       
     for (const player of disconnectedPlayers) {
       await ctx.db.delete(player._id);
+    }
+    
+    // Rebalance NPCs after cleanup
+    if (disconnectedPlayers.length > 0) {
+      await ctx.runMutation(internal.npcZombies.balanceNPCs, {});
     }
     
     return disconnectedPlayers.length;
