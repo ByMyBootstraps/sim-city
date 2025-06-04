@@ -1,6 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query, action, internalMutation } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { mutation, query, internalMutation } from "./_generated/server";
 
 // Spawn NPC zombies
 export const spawnNPCZombies = internalMutation({
@@ -301,7 +300,7 @@ export const updateNPCZombies = mutation({
           lastMoveTime: now,
           wanderCooldown: newWanderCooldown,
         });
-      } catch (error) {
+      } catch {
         // NPC might have been deleted by balancing, skip this NPC
         continue;
       }

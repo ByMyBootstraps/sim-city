@@ -28,8 +28,9 @@ export default defineSchema({
     
   gameState: defineTable({
     gameId: v.string(),
-    status: v.union(v.literal("waiting"), v.literal("playing"), v.literal("ended")),
+    status: v.union(v.literal("lobby"), v.literal("playing"), v.literal("ended")),
     firstZombieSelected: v.boolean(),
     roundStartTime: v.optional(v.number()),
+    hostPlayerId: v.optional(v.id("players")), // The first player who can start the game
   }).index("by_gameId", ["gameId"]),
 });

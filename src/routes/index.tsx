@@ -4,11 +4,21 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { api } from "../../convex/_generated/api";
-import { cityLayout, checkCollision, getValidSpawnPoints } from "@/cityLayout";
+import { cityLayout, checkCollision } from "@/cityLayout";
 
 const playersQueryOptions = convexQuery(api.players.getAllPlayers, {});
 const gameStateQueryOptions = convexQuery(api.players.getGameState, {});
 const npcZombiesQueryOptions = convexQuery(api.npcZombies.getAllNPCZombies, {});
+
+// Movement constants for smooth gameplay
+const MOVEMENT_CONSTANTS = {
+  HUMAN_SPEED: 200, // pixels per second
+  ZOMBIE_BASE_SPEED: 260, // pixels per second (30% faster than humans)
+  ZOMBIE_SPEED_REDUCTION: 15, // pixels per second reduction per additional zombie
+  MIN_ZOMBIE_SPEED: 120, // minimum zombie speed
+  SYNC_RATE: 1000 / 20, // 20 Hz sync rate (50ms)
+  FRAME_RATE: 1000 / 60, // 60 FPS for smooth local movement
+};
 
 export const Route = createFileRoute("/")({
   loader: async ({ context: { queryClient } }) => {
@@ -22,17 +32,17 @@ export const Route = createFileRoute("/")({
 });
 
 function HomePage() {
-  const [gameState, setGameState] = useState<'lobby' | 'playing'>('lobby');
+  const [localState, setLocalState] = useState<'username' | 'joined'>('username');
   const [username, setUsername] = useState('');
   const [currentPlayerId, setCurrentPlayerId] = useState<string | null>(null);
 
-  if (gameState === 'lobby') {
+  if (localState === 'username') {
     return <UsernameForm 
       username={username} 
       setUsername={setUsername}
       onJoin={(playerId) => {
         setCurrentPlayerId(playerId);
-        setGameState('playing');
+        setLocalState('joined');
       }}
     />;
   }
@@ -78,7 +88,7 @@ function UsernameForm({
         Survive as long as you can!
       </p>
       
-      <form onSubmit={handleJoin} className="not-prose max-w-md mx-auto">
+      <form onSubmit={(e) => void handleJoin(e)} className="not-prose max-w-md mx-auto">
         <div className="form-control mb-4">
           <label className="label">
             <span className="label-text">Choose your username</span>
@@ -114,6 +124,7 @@ function GameView({ playerId, username }: { playerId: string; username: string }
   const updatePosition = useMutation(api.players.updatePlayerPosition);
   const cleanupDisconnected = useMutation(api.players.cleanupDisconnectedPlayers);
   const updateNPCs = useMutation(api.npcZombies.updateNPCZombies);
+  const startGame = useMutation(api.players.startGame);
   
   // Professional movement system state
   const keysRef = useRef<{[key: string]: boolean}>({});
@@ -121,21 +132,11 @@ function GameView({ playerId, username }: { playerId: string; username: string }
   const gameLoopRef = useRef<number | null>(null);
   const localPositionRef = useRef<{x: number, y: number} | null>(null);
   const lastSyncRef = useRef<number>(0);
+  const [isStarting, setIsStarting] = useState(false);
   
   const currentPlayer = players.find(p => p._id === playerId);
-  const otherPlayers = players.filter(p => p._id !== playerId);
   const zombiePlayers = players.filter(p => p.isZombie === true);
   const humanPlayers = players.filter(p => p.isZombie !== true);
-  
-  // Movement constants for smooth gameplay
-  const MOVEMENT_CONSTANTS = {
-    HUMAN_SPEED: 200, // pixels per second
-    ZOMBIE_BASE_SPEED: 260, // pixels per second (30% faster than humans)
-    ZOMBIE_SPEED_REDUCTION: 15, // pixels per second reduction per additional zombie
-    MIN_ZOMBIE_SPEED: 120, // minimum zombie speed
-    SYNC_RATE: 1000 / 20, // 20 Hz sync rate (50ms)
-    FRAME_RATE: 1000 / 60, // 60 FPS for smooth local movement
-  };
   
   // Calculate zombie speed based on zombie count
   const getZombieSpeed = useCallback(() => {
@@ -375,7 +376,7 @@ function GameView({ playerId, username }: { playerId: string; username: string }
     };
 
     render();
-  }, [players, playerId, npcZombies]);
+  }, [players, playerId, npcZombies, humanPlayers]);
 
 
   // Cleanup disconnected players and run NPC AI periodically
@@ -394,10 +395,72 @@ function GameView({ playerId, username }: { playerId: string; username: string }
       clearInterval(cleanup);
       clearInterval(npcAI);
     };
-  }, [cleanupDisconnected, updateNPCs]);
+  }, [cleanupDisconnected, updateNPCs, humanPlayers]);
 
   if (!currentPlayer) {
     return <div className="text-center">Loading...</div>;
+  }
+
+  // Handle lobby state
+  if (gameState?.status === 'lobby') {
+    const isHost = gameState.hostPlayerId === playerId;
+
+    const handleStartGame = async () => {
+      setIsStarting(true);
+      try {
+        await startGame({ playerId });
+      } catch (error) {
+        alert(error instanceof Error ? error.message : 'Failed to start game');
+        setIsStarting(false);
+      }
+    };
+
+    return (
+      <div className="text-center">
+        <h1 className="mb-8">🧟 Zombie City Survival - Lobby</h1>
+        <div className="mb-6">
+          <h2 className="text-xl mb-4">Waiting for game to start...</h2>
+          <div className="mb-4">
+            <span className="font-semibold">Players in lobby:</span>
+            <div className="mt-2">
+              {players.map((player) => (
+                <div key={player._id} className={`inline-block px-2 py-1 m-1 rounded ${
+                  player._id === gameState.hostPlayerId ? 'bg-primary text-primary-content' : 'bg-base-200'
+                }`}>
+                  {player.username} {player._id === gameState.hostPlayerId && '(Host)'}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="text-sm opacity-70 mb-6">
+            {players.length}/10 players joined
+          </div>
+          
+          {isHost ? (
+            <div>
+              <p className="mb-4">You are the host. You can start the game when ready!</p>
+              <button 
+                className="btn btn-primary btn-lg"
+                onClick={() => void handleStartGame()}
+                disabled={isStarting}
+              >
+                {isStarting ? 'Starting...' : 'Start Game'}
+              </button>
+              <p className="text-xs mt-2 opacity-60">
+                You will become the first zombie when the game starts
+              </p>
+            </div>
+          ) : (
+            <div>
+              <p className="text-lg">Waiting for host to start the game...</p>
+              <p className="text-sm opacity-70 mt-2">
+                The host ({players.find(p => p._id === gameState.hostPlayerId)?.username}) will start when ready
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
   }
 
   const gameStatus = humanPlayers.length === 0 && zombiePlayers.length > 0 ? 'ended' : 'playing';

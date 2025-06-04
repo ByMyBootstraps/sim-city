@@ -1,7 +1,7 @@
 import { v } from "convex/values";
-import { mutation, query, action } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { ConvexError } from "convex/values";
-import { api, internal } from "./_generated/api";
+import { internal } from "./_generated/api";
 
 export const spawnPlayer = mutation({
   args: {
@@ -19,6 +19,10 @@ export const spawnPlayer = mutation({
       throw new ConvexError("Username already taken");
     }
 
+    // Get current players to determine if this is the first player
+    const existingPlayers = await ctx.db.query("players").collect();
+    const isFirstPlayer = existingPlayers.length === 0;
+
     // Get or create game state
     let gameState = await ctx.db
       .query("gameState")
@@ -26,11 +30,19 @@ export const spawnPlayer = mutation({
       .unique();
       
     if (!gameState) {
-      await ctx.db.insert("gameState", {
+      gameState = {
+        _id: await ctx.db.insert("gameState", {
+          gameId: "main",
+          status: "lobby",
+          firstZombieSelected: false,
+          hostPlayerId: undefined, // Will be set below for first player
+        }),
         gameId: "main",
-        status: "waiting",
+        status: "lobby" as const,
         firstZombieSelected: false,
-      });
+        hostPlayerId: undefined,
+        _creationTime: Date.now(),
+      };
     }
 
     // Spawn player at a safe sidewalk location
@@ -53,16 +65,14 @@ export const spawnPlayer = mutation({
       y: randomSpawn.y,
       health: 100,
       lastActiveTime: Date.now(),
-      isZombie: isFirstZombie, // First player when no zombies exist becomes zombie
+      isZombie: isFirstZombie, // Players start as humans in lobby
       connectionId: connectionId,
     });
 
-    // Update game state if this was the first zombie
-    if (isFirstZombie && gameState) {
+    // Set first player as host if this is the first player
+    if (isFirstPlayer && gameState) {
       await ctx.db.patch(gameState._id, {
-        firstZombieSelected: true,
-        status: "playing",
-        roundStartTime: Date.now(),
+        hostPlayerId: playerId,
       });
     }
 
@@ -176,5 +186,56 @@ export const disconnectPlayer = mutation({
   },
   handler: async (ctx, { playerId }) => {
     await ctx.db.delete(playerId);
+  },
+});
+
+export const startGame = mutation({
+  args: {
+    playerId: v.id("players"),
+  },
+  handler: async (ctx, { playerId }) => {
+    // Get game state
+    const gameState = await ctx.db
+      .query("gameState")
+      .withIndex("by_gameId", (q) => q.eq("gameId", "main"))
+      .unique();
+
+    if (!gameState) {
+      throw new ConvexError("Game state not found");
+    }
+
+    // Check if this player is the host
+    if (gameState.hostPlayerId !== playerId) {
+      throw new ConvexError("Only the host can start the game");
+    }
+
+    // Check if game is in lobby state
+    if (gameState.status !== "lobby") {
+      throw new ConvexError("Game is not in lobby state");
+    }
+
+    // Get all players to make first one a zombie
+    const players = await ctx.db.query("players").collect();
+    if (players.length === 0) {
+      throw new ConvexError("No players found");
+    }
+
+    // Make the first player (host) a zombie
+    const hostPlayer = players.find(p => p._id === playerId);
+    if (hostPlayer) {
+      await ctx.db.patch(playerId, {
+        isZombie: true,
+        health: 100,
+      });
+    }
+
+    // Update game state to playing
+    await ctx.db.patch(gameState._id, {
+      status: "playing",
+      firstZombieSelected: true,
+      roundStartTime: Date.now(),
+    });
+
+    return { success: true };
   },
 });
