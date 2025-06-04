@@ -30,14 +30,14 @@
 - **Error Handling**: Prevents crashes during rapid state changes and race conditions
 
 ### Current Step:
-- Fixed loading screen hang caused by NPC update race conditions
+- Fixed lobby system stability issues
 
-### Latest Achievement: NPC Race Condition Fix
-- **Frontend Fix**: Removed humanPlayers dependency from NPC update useEffect to prevent interval recreation
-- **Overlap Prevention**: Added ref to prevent multiple concurrent NPC updates from running
-- **Rate Limiting**: Increased NPC update interval from 100ms to 150ms to reduce server load
-- **Backend Protection**: Added lastNPCUpdate timestamp to gameState to prevent rapid successive calls
-- **Stable 10-Player Games**: Loading screen no longer hangs with multiple players
+### Latest Achievement: Lobby System Stability Fix
+- **Race Condition Prevention**: Get game state before checking existing players to avoid host assignment conflicts
+- **Robust Host Management**: Set host if no host exists OR no players exist, preventing multiple hosts
+- **Automatic Host Reassignment**: When host leaves/disconnects, automatically assign new host from remaining players
+- **Game State Reset**: When all players leave, automatically reset game state to lobby for fresh start
+- **Stable Multiplayer Lobby**: No more new lobbies created when players join existing games
 
 ### Lobby System (Previously Completed):
 - **Host-controlled game start**: First player becomes host and can start the game

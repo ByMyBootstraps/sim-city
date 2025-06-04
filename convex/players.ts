@@ -19,11 +19,7 @@ export const spawnPlayer = mutation({
       throw new ConvexError("Username already taken");
     }
 
-    // Get current players to determine if this is the first player
-    const existingPlayers = await ctx.db.query("players").collect();
-    const isFirstPlayer = existingPlayers.length === 0;
-
-    // Get or create game state
+    // Get or create game state first to avoid race conditions
     let gameState = await ctx.db
       .query("gameState")
       .withIndex("by_gameId", (q) => q.eq("gameId", "main"))
@@ -40,6 +36,10 @@ export const spawnPlayer = mutation({
       // Fetch the newly created game state
       gameState = await ctx.db.get(gameStateId);
     }
+
+    // Get current players to determine if this is the first player
+    const existingPlayers = await ctx.db.query("players").collect();
+    const needsHost = existingPlayers.length === 0 || !gameState?.hostPlayerId;
 
     // Spawn player at a safe sidewalk location
     const spawnPoints = [
@@ -65,8 +65,8 @@ export const spawnPlayer = mutation({
       connectionId: connectionId,
     });
 
-    // Set first player as host if this is the first player
-    if (isFirstPlayer && gameState) {
+    // Set this player as host if no host exists or no players exist
+    if (needsHost && gameState) {
       await ctx.db.patch(gameState._id, {
         hostPlayerId: playerId,
       });
@@ -171,17 +171,41 @@ export const cleanupDisconnectedPlayers = mutation({
       .withIndex("by_lastActiveTime", (q) => q.lt("lastActiveTime", thirtySecondsAgo))
       .collect();
       
+    let hostWasDeleted = false;
+    const gameState = await ctx.db
+      .query("gameState")
+      .withIndex("by_gameId", (q) => q.eq("gameId", "main"))
+      .unique();
+    
     for (const player of disconnectedPlayers) {
+      // Check if we're deleting the current host
+      if (gameState?.hostPlayerId === player._id) {
+        hostWasDeleted = true;
+      }
       await ctx.db.delete(player._id);
+    }
+    
+    // Reassign host if the current host was deleted
+    if (hostWasDeleted && gameState) {
+      const remainingPlayers = await ctx.db.query("players").collect();
+      if (remainingPlayers.length > 0) {
+        // Assign the first remaining player as the new host
+        await ctx.db.patch(gameState._id, {
+          hostPlayerId: remainingPlayers[0]._id,
+        });
+      } else {
+        // No players left, reset game state to lobby
+        await ctx.db.patch(gameState._id, {
+          hostPlayerId: undefined,
+          status: "lobby",
+          firstZombieSelected: false,
+          roundStartTime: undefined,
+        });
+      }
     }
     
     // Rebalance NPCs after cleanup - only during gameplay
     if (disconnectedPlayers.length > 0) {
-      const gameState = await ctx.db
-        .query("gameState")
-        .withIndex("by_gameId", (q) => q.eq("gameId", "main"))
-        .unique();
-      
       if (gameState?.status === "playing") {
         await ctx.runMutation(internal.npcZombies.balanceNPCs, {});
       }
