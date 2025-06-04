@@ -44,6 +44,16 @@ export const spawnNPCZombies = internalMutation({
 export const updateNPCZombies = mutation({
   args: {},
   handler: async (ctx) => {
+    // Check game state - only update NPCs during "playing" state
+    const gameState = await ctx.db
+      .query("gameState")
+      .withIndex("by_gameId", (q) => q.eq("gameId", "main"))
+      .unique();
+
+    if (gameState?.status !== "playing") {
+      return; // Skip NPC updates during lobby
+    }
+
     const npcs = await ctx.db.query("npcZombies").collect();
     const players = await ctx.db.query("players").collect();
     const humanPlayers = players.filter(p => p.isZombie !== true);
@@ -333,6 +343,16 @@ export const clearAllNPCs = mutation({
 export const balanceNPCs = internalMutation({
   args: {},
   handler: async (ctx) => {
+    // Check game state - only balance NPCs during "playing" state
+    const gameState = await ctx.db
+      .query("gameState")
+      .withIndex("by_gameId", (q) => q.eq("gameId", "main"))
+      .unique();
+
+    if (gameState?.status !== "playing") {
+      return { humanCount: 0, targetNPCCount: 0, currentNPCCount: 0 };
+    }
+
     // Get current human count
     const players = await ctx.db.query("players").collect();
     const humanCount = players.filter(p => p.isZombie !== true).length;

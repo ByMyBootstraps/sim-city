@@ -72,8 +72,8 @@ export const spawnPlayer = mutation({
       });
     }
 
-    // Balance NPCs after player spawn
-    await ctx.runMutation(internal.npcZombies.balanceNPCs, {});
+    // Don't balance NPCs in lobby - only during gameplay
+    // await ctx.runMutation(internal.npcZombies.balanceNPCs, {});
 
     return playerId;
   },
@@ -89,6 +89,12 @@ export const updatePlayerPosition = mutation({
     const player = await ctx.db.get(playerId);
     if (!player) return;
 
+    // Check game state - only allow infections during "playing" state
+    const gameState = await ctx.db
+      .query("gameState")
+      .withIndex("by_gameId", (q) => q.eq("gameId", "main"))
+      .unique();
+
     // Update position
     await ctx.db.patch(playerId, {
       x,
@@ -96,8 +102,8 @@ export const updatePlayerPosition = mutation({
       lastActiveTime: Date.now(),
     });
 
-    // Check for zombie infections if this player is a zombie
-    if (player.isZombie === true) {
+    // Check for zombie infections if this player is a zombie AND game is playing
+    if (player.isZombie === true && gameState?.status === "playing") {
       const allPlayers = await ctx.db.query("players").collect();
       const humanPlayers = allPlayers.filter(p => p.isZombie !== true && p._id !== playerId);
       
@@ -145,9 +151,16 @@ export const cleanupDisconnectedPlayers = mutation({
       await ctx.db.delete(player._id);
     }
     
-    // Rebalance NPCs after cleanup
+    // Rebalance NPCs after cleanup - only during gameplay
     if (disconnectedPlayers.length > 0) {
-      await ctx.runMutation(internal.npcZombies.balanceNPCs, {});
+      const gameState = await ctx.db
+        .query("gameState")
+        .withIndex("by_gameId", (q) => q.eq("gameId", "main"))
+        .unique();
+      
+      if (gameState?.status === "playing") {
+        await ctx.runMutation(internal.npcZombies.balanceNPCs, {});
+      }
     }
     
     return disconnectedPlayers.length;
@@ -231,6 +244,9 @@ export const startGame = mutation({
       firstZombieSelected: true,
       roundStartTime: Date.now(),
     });
+
+    // Now that game is playing, balance NPCs for the new zombie
+    await ctx.runMutation(internal.npcZombies.balanceNPCs, {});
 
     return { success: true };
   },
