@@ -54,6 +54,18 @@ export const updateNPCZombies = mutation({
       return; // Skip NPC updates during lobby
     }
 
+    // Add a small delay to reduce conflicts between rapid calls
+    const currentTime = Date.now();
+    const lastUpdate = gameState.lastNPCUpdate || 0;
+    if (currentTime - lastUpdate < 100) { // Minimum 100ms between updates
+      return;
+    }
+
+    // Mark the update time to prevent rapid successive calls
+    await ctx.db.patch(gameState._id, {
+      lastNPCUpdate: currentTime,
+    });
+
     const npcs = await ctx.db.query("npcZombies").collect();
     const players = await ctx.db.query("players").collect();
     const humanPlayers = players.filter(p => p.isZombie !== true);

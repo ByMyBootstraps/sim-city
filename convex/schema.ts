@@ -32,5 +32,6 @@ export default defineSchema({
     firstZombieSelected: v.boolean(),
     roundStartTime: v.optional(v.number()),
     hostPlayerId: v.optional(v.id("players")), // The first player who can start the game
+    lastNPCUpdate: v.optional(v.number()), // Track last NPC update to prevent conflicts
   }).index("by_gameId", ["gameId"]),
 });

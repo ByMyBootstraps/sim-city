@@ -158,6 +158,7 @@ function GameView({ playerId, username }: { playerId: Id<"players">; username: s
   const localPositionRef = useRef<{x: number, y: number} | null>(null);
   const lastSyncRef = useRef<number>(0);
   const [isStarting, setIsStarting] = useState(false);
+  const npcUpdateInProgressRef = useRef<boolean>(false);
   
   const currentPlayer = players.find(p => p._id === playerId);
   const zombiePlayers = players.filter(p => p.isZombie === true);
@@ -411,16 +412,22 @@ function GameView({ playerId, username }: { playerId: Id<"players">; username: s
     }, 10000); // Clean up every 10 seconds
 
     const npcAI = setInterval(() => {
-      updateNPCs().catch(() => {
-        // Ignore NPC update errors during rapid state changes
-      });
-    }, 100); // Run NPC AI every 100ms for smooth movement
+      // Prevent overlapping NPC updates
+      if (!npcUpdateInProgressRef.current) {
+        npcUpdateInProgressRef.current = true;
+        updateNPCs().catch(() => {
+          // Ignore NPC update errors during rapid state changes
+        }).finally(() => {
+          npcUpdateInProgressRef.current = false;
+        });
+      }
+    }, 150); // Run NPC AI every 150ms to reduce conflicts
 
     return () => {
       clearInterval(cleanup);
       clearInterval(npcAI);
     };
-  }, [cleanupDisconnected, updateNPCs, humanPlayers]);
+  }, [cleanupDisconnected, updateNPCs]); // Removed humanPlayers dependency
 
   if (!currentPlayer) {
     return <div className="text-center">Loading...</div>;

@@ -30,13 +30,14 @@
 - **Error Handling**: Prevents crashes during rapid state changes and race conditions
 
 ### Current Step:
-- Fixed OptimisticConcurrencyControlFailure race condition
+- Fixed loading screen hang caused by NPC update race conditions
 
-### Latest Achievement: Race Condition Fix
-- **Eliminated Race Condition**: Moved NPC infection logic from updateNPCZombies to updatePlayerPosition
-- **Single Source of Truth**: All infections now handled in one mutation to prevent OptimisticConcurrencyControlFailure
-- **Maintained Functionality**: Both player-to-player and NPC-to-player infections still work correctly
-- **Stable Multiplayer**: No more concurrent write conflicts during gameplay
+### Latest Achievement: NPC Race Condition Fix
+- **Frontend Fix**: Removed humanPlayers dependency from NPC update useEffect to prevent interval recreation
+- **Overlap Prevention**: Added ref to prevent multiple concurrent NPC updates from running
+- **Rate Limiting**: Increased NPC update interval from 100ms to 150ms to reduce server load
+- **Backend Protection**: Added lastNPCUpdate timestamp to gameState to prevent rapid successive calls
+- **Stable 10-Player Games**: Loading screen no longer hangs with multiple players
 
 ### Lobby System (Previously Completed):
 - **Host-controlled game start**: First player becomes host and can start the game
