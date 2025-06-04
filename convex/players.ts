@@ -108,7 +108,29 @@ export const updatePlayerPosition = mutation({
           });
           
           // Spawn 10 NPC zombies when a human gets infected
-          await ctx.runMutation(internal.npcZombies.spawnNPCZombies, { count: 10 });
+          const spawnPoints = [
+            { x: 150, y: 200 }, { x: 350, y: 200 }, { x: 550, y: 200 }, { x: 750, y: 200 },
+            { x: 150, y: 400 }, { x: 350, y: 400 }, { x: 550, y: 400 }, { x: 750, y: 400 },
+            { x: 220, y: 100 }, { x: 220, y: 300 }, { x: 220, y: 500 },
+            { x: 420, y: 100 }, { x: 420, y: 300 }, { x: 420, y: 500 },
+            { x: 620, y: 100 }, { x: 620, y: 300 }, { x: 620, y: 500 },
+          ];
+
+          for (let i = 0; i < 10; i++) {
+            const spawnPoint = spawnPoints[Math.floor(Math.random() * spawnPoints.length)];
+            const npcX = spawnPoint.x + (Math.random() - 0.5) * 100;
+            const npcY = spawnPoint.y + (Math.random() - 0.5) * 100;
+            
+            await ctx.db.insert("npcZombies", {
+              x: Math.max(20, Math.min(780, npcX)),
+              y: Math.max(20, Math.min(580, npcY)),
+              targetX: Math.max(20, Math.min(780, npcX)),
+              targetY: Math.max(20, Math.min(580, npcY)),
+              speed: 80 + Math.random() * 40,
+              lastMoveTime: Date.now(),
+              wanderCooldown: Date.now() + Math.random() * 3000,
+            });
+          }
         }
       }
     }
