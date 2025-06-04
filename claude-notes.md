@@ -15,16 +15,20 @@
 - Created claude-notes.md file
 - Gathered requirements from user
 - Removed template line from CLAUDE.md
+- Created player schema in Convex (username, x, y, health, lastActiveTime)
+- Implemented player mutations (spawn, update position, get all players)
+- Built complete game UI with username form and canvas game view
+- Added WASD/arrow key movement controls
+- Implemented health bar display
+- Removed all demo auth content
 
 ### Current Step:
-- Planning MVP implementation
+- Testing implementation
 
 ### Next Steps:
-1. Plan MVP architecture (Convex for real-time player state, Canvas/SVG for 2D rendering)
-2. Remove demo content but keep auth structure
-3. Implement player spawning with username
-4. Add health bar UI
-5. Implement movement controls and real-time sync
+1. Start dev servers and test the game
+2. Test multiplayer functionality with multiple browser tabs
+3. Verify real-time movement sync between players
 
 ### Commits Made:
 - (None yet - first commit after planning)
