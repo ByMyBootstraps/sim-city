@@ -41,43 +41,90 @@ export const spawnNPCZombies = internalMutation({
   },
 });
 
-// Professional NPC movement system - completely rewritten from scratch
+// Professional NPC hunting system with pathfinding
 export const updateNPCZombies = mutation({
   args: {},
   handler: async (ctx) => {
     const npcs = await ctx.db.query("npcZombies").collect();
+    const players = await ctx.db.query("players").collect();
+    const humanPlayers = players.filter(p => p.isZombie !== true);
     const now = Date.now();
     
-    // Movement constants for professional behavior
-    const MOVEMENT_SPEED = 60; // pixels per second - slower than players
+    // Movement constants for hunting behavior
+    const MOVEMENT_SPEED = 80; // pixels per second - hunting speed
     const TARGET_RADIUS = 8; // how close to target before picking new one
-    const MIN_WANDER_TIME = 1500; // minimum time before changing direction (ms)
-    const MAX_WANDER_TIME = 4000; // maximum time before changing direction (ms)
+    const DETECTION_RANGE = 150; // how far NPCs can "see" humans
+    const RETARGET_INTERVAL = 2000; // retarget every 2 seconds
     
-    // Pre-defined waypoints for natural movement
-    const waypoints = [
-      // Horizontal road waypoints
-      { x: 100, y: 200 }, { x: 250, y: 200 }, { x: 350, y: 200 }, { x: 450, y: 200 }, 
-      { x: 550, y: 200 }, { x: 650, y: 200 }, { x: 750, y: 200 },
-      { x: 100, y: 400 }, { x: 250, y: 400 }, { x: 350, y: 400 }, { x: 450, y: 400 }, 
-      { x: 550, y: 400 }, { x: 650, y: 400 }, { x: 750, y: 400 },
+    // Navigation waypoints for pathfinding around buildings
+    const navigationNodes = [
+      // Horizontal road nodes
+      { x: 50, y: 200 }, { x: 120, y: 200 }, { x: 180, y: 200 }, { x: 260, y: 200 }, 
+      { x: 320, y: 200 }, { x: 380, y: 200 }, { x: 460, y: 200 }, { x: 520, y: 200 },
+      { x: 580, y: 200 }, { x: 660, y: 200 }, { x: 720, y: 200 }, { x: 780, y: 200 },
       
-      // Vertical road waypoints
-      { x: 220, y: 50 }, { x: 220, y: 150 }, { x: 220, y: 250 }, { x: 220, y: 350 }, { x: 220, y: 450 }, { x: 220, y: 550 },
-      { x: 420, y: 50 }, { x: 420, y: 150 }, { x: 420, y: 250 }, { x: 420, y: 350 }, { x: 420, y: 450 }, { x: 420, y: 550 },
-      { x: 620, y: 50 }, { x: 620, y: 150 }, { x: 620, y: 250 }, { x: 620, y: 350 }, { x: 620, y: 450 }, { x: 620, y: 550 },
+      { x: 50, y: 400 }, { x: 120, y: 400 }, { x: 180, y: 400 }, { x: 260, y: 400 }, 
+      { x: 320, y: 400 }, { x: 380, y: 400 }, { x: 460, y: 400 }, { x: 520, y: 400 },
+      { x: 580, y: 400 }, { x: 660, y: 400 }, { x: 720, y: 400 }, { x: 780, y: 400 },
       
-      // Park and open area waypoints
+      // Vertical road nodes
+      { x: 220, y: 30 }, { x: 220, y: 80 }, { x: 220, y: 130 }, { x: 220, y: 170 },
+      { x: 220, y: 230 }, { x: 220, y: 280 }, { x: 220, y: 320 }, { x: 220, y: 370 },
+      { x: 220, y: 430 }, { x: 220, y: 480 }, { x: 220, y: 530 }, { x: 220, y: 580 },
+      
+      { x: 420, y: 30 }, { x: 420, y: 80 }, { x: 420, y: 130 }, { x: 420, y: 170 },
+      { x: 420, y: 230 }, { x: 420, y: 280 }, { x: 420, y: 320 }, { x: 420, y: 370 },
+      { x: 420, y: 430 }, { x: 420, y: 480 }, { x: 420, y: 530 }, { x: 420, y: 580 },
+      
+      { x: 620, y: 30 }, { x: 620, y: 80 }, { x: 620, y: 130 }, { x: 620, y: 170 },
+      { x: 620, y: 230 }, { x: 620, y: 280 }, { x: 620, y: 320 }, { x: 620, y: 370 },
+      { x: 620, y: 430 }, { x: 620, y: 480 }, { x: 620, y: 530 }, { x: 620, y: 580 },
+      
+      // Park and intersection nodes
       { x: 90, y: 340 }, { x: 320, y: 360 }, { x: 520, y: 340 }, { x: 715, y: 350 },
+      { x: 220, y: 200 }, { x: 420, y: 200 }, { x: 620, y: 200 }, // Road intersections
+      { x: 220, y: 400 }, { x: 420, y: 400 }, { x: 620, y: 400 }, // Road intersections
     ];
     
-    for (const npc of npcs) {
-      const deltaTime = Math.min((now - npc.lastMoveTime) / 1000, 0.1); // Cap delta time to prevent large jumps
+    // Simple pathfinding: find nearest navigation node to target
+    function findPathToTarget(startX: number, startY: number, targetX: number, targetY: number) {
+      // Find closest navigation node to current position
+      let closestToStart = navigationNodes[0];
+      let minDistToStart = Infinity;
       
-      // Calculate distance to current target
-      const dx = npc.targetX - npc.x;
-      const dy = npc.targetY - npc.y;
-      const distanceToTarget = Math.sqrt(dx * dx + dy * dy);
+      // Find closest navigation node to target
+      let closestToTarget = navigationNodes[0];
+      let minDistToTarget = Infinity;
+      
+      for (const node of navigationNodes) {
+        const distToStart = Math.sqrt(Math.pow(node.x - startX, 2) + Math.pow(node.y - startY, 2));
+        const distToTarget = Math.sqrt(Math.pow(node.x - targetX, 2) + Math.pow(node.y - targetY, 2));
+        
+        if (distToStart < minDistToStart) {
+          minDistToStart = distToStart;
+          closestToStart = node;
+        }
+        
+        if (distToTarget < minDistToTarget) {
+          minDistToTarget = distToTarget;
+          closestToTarget = node;
+        }
+      }
+      
+      // Simple pathfinding: go to intermediate waypoint if needed
+      const directDist = Math.sqrt(Math.pow(targetX - startX, 2) + Math.pow(targetY - startY, 2));
+      const waypointDist = Math.sqrt(Math.pow(closestToTarget.x - startX, 2) + Math.pow(closestToTarget.y - startY, 2));
+      
+      // If waypoint is closer than direct path or we're far from target, use waypoint
+      if (waypointDist < directDist * 0.8 || directDist > DETECTION_RANGE) {
+        return closestToTarget;
+      } else {
+        return { x: targetX, y: targetY };
+      }
+    }
+    
+    for (const npc of npcs) {
+      const deltaTime = Math.min((now - npc.lastMoveTime) / 1000, 0.1);
       
       let newX = npc.x;
       let newY = npc.y;
@@ -85,27 +132,46 @@ export const updateNPCZombies = mutation({
       let newTargetY = npc.targetY;
       let newWanderCooldown = npc.wanderCooldown;
       
-      // Check if we need a new target
-      const needsNewTarget = distanceToTarget < TARGET_RADIUS || now >= npc.wanderCooldown;
+      // Check if we need to retarget
+      const needsRetarget = now >= npc.wanderCooldown;
       
-      if (needsNewTarget) {
-        // Pick a new waypoint target
-        const target = waypoints[Math.floor(Math.random() * waypoints.length)];
+      if (needsRetarget) {
+        // Find nearest human player
+        let nearestHuman = null;
+        let nearestDistance = Infinity;
         
-        // Add some randomization around the waypoint
-        const randomOffset = 30;
-        newTargetX = target.x + (Math.random() - 0.5) * randomOffset;
-        newTargetY = target.y + (Math.random() - 0.5) * randomOffset;
+        for (const human of humanPlayers) {
+          const distance = Math.sqrt(Math.pow(human.x - npc.x, 2) + Math.pow(human.y - npc.y, 2));
+          if (distance < nearestDistance && distance <= DETECTION_RANGE) {
+            nearestDistance = distance;
+            nearestHuman = human;
+          }
+        }
+        
+        if (nearestHuman) {
+          // Hunt the nearest human using pathfinding
+          const pathTarget = findPathToTarget(npc.x, npc.y, nearestHuman.x, nearestHuman.y);
+          newTargetX = pathTarget.x;
+          newTargetY = pathTarget.y;
+        } else {
+          // No humans in range, wander to a random navigation node
+          const randomNode = navigationNodes[Math.floor(Math.random() * navigationNodes.length)];
+          newTargetX = randomNode.x + (Math.random() - 0.5) * 40;
+          newTargetY = randomNode.y + (Math.random() - 0.5) * 40;
+        }
         
         // Ensure target is within bounds
         newTargetX = Math.max(25, Math.min(775, newTargetX));
         newTargetY = Math.max(25, Math.min(575, newTargetY));
         
-        // Set new wander cooldown
-        newWanderCooldown = now + MIN_WANDER_TIME + Math.random() * (MAX_WANDER_TIME - MIN_WANDER_TIME);
+        newWanderCooldown = now + RETARGET_INTERVAL;
       }
       
-      // Move towards target with smooth interpolation
+      // Move towards current target
+      const dx = newTargetX - npc.x;
+      const dy = newTargetY - npc.y;
+      const distanceToTarget = Math.sqrt(dx * dx + dy * dy);
+      
       if (distanceToTarget > 0.5) {
         // Normalize direction vector
         const dirX = dx / distanceToTarget;
@@ -118,7 +184,7 @@ export const updateNPCZombies = mutation({
         newX = npc.x + dirX * actualMoveDistance;
         newY = npc.y + dirY * actualMoveDistance;
         
-        // Keep within game bounds with padding
+        // Keep within game bounds
         newX = Math.max(25, Math.min(775, newX));
         newY = Math.max(25, Math.min(575, newY));
       }

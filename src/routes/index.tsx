@@ -333,9 +333,18 @@ function GameView({ playerId, username }: { playerId: string; username: string }
         }
       });
 
-      // Draw NPC zombies (smaller, gray)
+      // Draw NPC zombies (smaller, brown) with hunting behavior
       npcZombies.forEach(npc => {
-        ctx.fillStyle = '#8B4513'; // Brown color for NPCs
+        // Check if NPC is near any human (hunting behavior)
+        const nearestHuman = humanPlayers.reduce((nearest, human) => {
+          const distance = Math.sqrt(Math.pow(human.x - npc.x, 2) + Math.pow(human.y - npc.y, 2));
+          return !nearest || distance < nearest.distance ? { human, distance } : nearest;
+        }, null as { human: any, distance: number } | null);
+        
+        const isHunting = nearestHuman && nearestHuman.distance <= 150;
+        
+        // Color changes based on hunting state
+        ctx.fillStyle = isHunting ? '#CD853F' : '#8B4513'; // Lighter brown when hunting
         ctx.fillRect(npc.x - 6, npc.y - 6, 12, 12); // Smaller than players
         
         // Draw smaller zombie indicator
@@ -343,6 +352,16 @@ function GameView({ playerId, username }: { playerId: string; username: string }
         ctx.font = '10px sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText('🧟', npc.x, npc.y + 3);
+        
+        // Draw hunting indicator (red line to target)
+        if (isHunting && nearestHuman) {
+          ctx.strokeStyle = '#ff000060';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(npc.x, npc.y);
+          ctx.lineTo(nearestHuman.human.x, nearestHuman.human.y);
+          ctx.stroke();
+        }
       });
 
       requestAnimationFrame(render);
@@ -438,7 +457,7 @@ function GameView({ playerId, username }: { playerId: string; username: string }
         <br />
         {currentPlayer.isZombie === true ? 
           'Touch humans to infect them. Fewer humans = fewer NPC zombies!' : 
-          'Avoid player zombies to survive. NPCs roam the city (10 per human player).'}
+          'Avoid zombies! NPCs actively hunt humans with pathfinding (10 per human).'}
       </div>
     </div>
   );
