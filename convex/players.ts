@@ -30,19 +30,15 @@ export const spawnPlayer = mutation({
       .unique();
       
     if (!gameState) {
-      gameState = {
-        _id: await ctx.db.insert("gameState", {
-          gameId: "main",
-          status: "lobby",
-          firstZombieSelected: false,
-          hostPlayerId: undefined, // Will be set below for first player
-        }),
+      const gameStateId = await ctx.db.insert("gameState", {
         gameId: "main",
-        status: "lobby" as const,
+        status: "lobby",
         firstZombieSelected: false,
-        hostPlayerId: undefined,
-        _creationTime: Date.now(),
-      };
+        hostPlayerId: undefined, // Will be set below for first player
+      });
+      
+      // Fetch the newly created game state
+      gameState = await ctx.db.get(gameStateId);
     }
 
     // Spawn player at a safe sidewalk location
@@ -235,6 +231,36 @@ export const startGame = mutation({
       firstZombieSelected: true,
       roundStartTime: Date.now(),
     });
+
+    return { success: true };
+  },
+});
+
+// Reset game to lobby state for testing
+export const resetGameToLobby = mutation({
+  args: {},
+  handler: async (ctx) => {
+    // Delete all players
+    const players = await ctx.db.query("players").collect();
+    for (const player of players) {
+      await ctx.db.delete(player._id);
+    }
+
+    // Delete all NPCs
+    const npcs = await ctx.db.query("npcZombies").collect();
+    for (const npc of npcs) {
+      await ctx.db.delete(npc._id);
+    }
+
+    // Reset or delete game state
+    const gameState = await ctx.db
+      .query("gameState")
+      .withIndex("by_gameId", (q) => q.eq("gameId", "main"))
+      .unique();
+
+    if (gameState) {
+      await ctx.db.delete(gameState._id);
+    }
 
     return { success: true };
   },

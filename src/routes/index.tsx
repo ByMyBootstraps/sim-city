@@ -60,7 +60,9 @@ function UsernameForm({
   onJoin: (playerId: string) => void;
 }) {
   const spawnPlayer = useMutation(api.players.spawnPlayer);
+  const resetGame = useMutation(api.players.resetGameToLobby);
   const [isSpawning, setIsSpawning] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,12 +82,23 @@ function UsernameForm({
     }
   };
 
+  const handleReset = async () => {
+    setIsResetting(true);
+    try {
+      await resetGame();
+      alert('Game reset successfully! The first player to join will be the host.');
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to reset game');
+    }
+    setIsResetting(false);
+  };
+
   return (
     <div className="text-center">
       <h1 className="mb-8">🧟 Zombie City Survival</h1>
       <p className="mb-6 text-base-content/70">
-        The first player becomes patient zero. Zombies infect humans on contact.<br/>
-        Survive as long as you can!
+        The first player to join becomes the host and can start the game.<br/>
+        Other players wait in lobby until host starts the game.
       </p>
       
       <form onSubmit={(e) => void handleJoin(e)} className="not-prose max-w-md mx-auto">
@@ -106,12 +119,23 @@ function UsernameForm({
         
         <button 
           type="submit" 
-          className="btn btn-primary btn-lg w-full"
+          className="btn btn-primary btn-lg w-full mb-4"
           disabled={isSpawning || !username.trim()}
         >
           {isSpawning ? 'Spawning...' : 'Enter City'}
         </button>
       </form>
+      
+      <div className="mt-6 pt-4 border-t border-base-300">
+        <p className="text-sm opacity-70 mb-2">For testing:</p>
+        <button 
+          className="btn btn-secondary btn-sm"
+          onClick={() => void handleReset()}
+          disabled={isResetting}
+        >
+          {isResetting ? 'Resetting...' : 'Reset Game to Lobby'}
+        </button>
+      </div>
     </div>
   );
 }
@@ -400,6 +424,11 @@ function GameView({ playerId, username }: { playerId: string; username: string }
   if (!currentPlayer) {
     return <div className="text-center">Loading...</div>;
   }
+
+  // Debug: Log game state
+  console.log('Game State:', gameState);
+  console.log('Current Player:', currentPlayer);
+  console.log('Players:', players);
 
   // Handle lobby state
   if (gameState?.status === 'lobby') {
