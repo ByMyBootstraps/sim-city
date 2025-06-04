@@ -102,23 +102,47 @@ export const updatePlayerPosition = mutation({
       lastActiveTime: Date.now(),
     });
 
-    // Check for zombie infections if this player is a zombie AND game is playing
-    if (player.isZombie === true && gameState?.status === "playing") {
-      const allPlayers = await ctx.db.query("players").collect();
-      const humanPlayers = allPlayers.filter(p => p.isZombie !== true && p._id !== playerId);
-      
-      for (const human of humanPlayers) {
-        const distance = Math.sqrt(Math.pow(x - human.x, 2) + Math.pow(y - human.y, 2));
+    // Check for infections during "playing" state only
+    if (gameState?.status === "playing") {
+      // Check for player-to-player zombie infections if this player is a zombie
+      if (player.isZombie === true) {
+        const allPlayers = await ctx.db.query("players").collect();
+        const humanPlayers = allPlayers.filter(p => p.isZombie !== true && p._id !== playerId);
         
-        // Infection radius of 25 pixels
-        if (distance <= 25) {
-          await ctx.db.patch(human._id, {
-            isZombie: true,
-            health: 100, // Zombies have full health
-          });
+        for (const human of humanPlayers) {
+          const distance = Math.sqrt(Math.pow(x - human.x, 2) + Math.pow(y - human.y, 2));
           
-          // When a human gets infected, rebalance NPCs (one less human = 10 fewer NPCs needed)
-          await ctx.runMutation(internal.npcZombies.balanceNPCs, {});
+          // Infection radius of 25 pixels
+          if (distance <= 25) {
+            await ctx.db.patch(human._id, {
+              isZombie: true,
+              health: 100, // Zombies have full health
+            });
+            
+            // When a human gets infected, rebalance NPCs (one less human = 10 fewer NPCs needed)
+            await ctx.runMutation(internal.npcZombies.balanceNPCs, {});
+          }
+        }
+      }
+      
+      // Check for NPC-to-player infections (if this player is human)
+      if (player.isZombie !== true) {
+        const npcs = await ctx.db.query("npcZombies").collect();
+        
+        for (const npc of npcs) {
+          const distance = Math.sqrt(Math.pow(x - npc.x, 2) + Math.pow(y - npc.y, 2));
+          
+          // Infection radius of 20 pixels for NPCs
+          if (distance <= 20) {
+            await ctx.db.patch(playerId, {
+              isZombie: true,
+              health: 100, // Zombies have full health
+            });
+            
+            // When a human gets infected, rebalance NPCs
+            await ctx.runMutation(internal.npcZombies.balanceNPCs, {});
+            break; // Player can only be infected once
+          }
         }
       }
     }

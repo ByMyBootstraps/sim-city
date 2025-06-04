@@ -30,13 +30,13 @@
 - **Error Handling**: Prevents crashes during rapid state changes and race conditions
 
 ### Current Step:
-- Fixed TypeScript compilation errors for production builds
+- Fixed OptimisticConcurrencyControlFailure race condition
 
-### Latest Achievement: TypeScript Build Fix
-- **Type Safety**: Fixed playerId type from string to Id<"players"> throughout component
-- **Build Success**: Project now compiles successfully for production deployment
-- **Convex Integration**: Proper type alignment between frontend and backend mutations
-- **Production Ready**: All TypeScript errors resolved, build passes on Vercel
+### Latest Achievement: Race Condition Fix
+- **Eliminated Race Condition**: Moved NPC infection logic from updateNPCZombies to updatePlayerPosition
+- **Single Source of Truth**: All infections now handled in one mutation to prevent OptimisticConcurrencyControlFailure
+- **Maintained Functionality**: Both player-to-player and NPC-to-player infections still work correctly
+- **Stable Multiplayer**: No more concurrent write conflicts during gameplay
 
 ### Lobby System (Previously Completed):
 - **Host-controlled game start**: First player becomes host and can start the game
