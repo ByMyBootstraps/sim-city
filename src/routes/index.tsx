@@ -116,8 +116,8 @@ function GameView({ playerId, username }: { playerId: string; username: string }
   
   const currentPlayer = players.find(p => p._id === playerId);
   const otherPlayers = players.filter(p => p._id !== playerId);
-  const zombiePlayers = players.filter(p => p.isZombie);
-  const humanPlayers = players.filter(p => !p.isZombie);
+  const zombiePlayers = players.filter(p => p.isZombie === true);
+  const humanPlayers = players.filter(p => p.isZombie !== true);
   
   // Calculate zombie speed based on zombie count (slower with more zombies)
   const getZombieSpeed = useCallback(() => {
@@ -161,7 +161,7 @@ function GameView({ playerId, username }: { playerId: string; username: string }
       const isCurrentPlayer = player._id === playerId;
       
       // Choose color based on zombie status
-      if (player.isZombie) {
+      if (player.isZombie === true) {
         ctx.fillStyle = isCurrentPlayer ? '#dc2626' : '#ef4444'; // Red for zombies
       } else {
         ctx.fillStyle = isCurrentPlayer ? '#2563eb' : '#3b82f6'; // Blue for humans
@@ -170,7 +170,7 @@ function GameView({ playerId, username }: { playerId: string; username: string }
       ctx.fillRect(player.x - 10, player.y - 10, 20, 20);
       
       // Draw zombie indicator
-      if (player.isZombie) {
+      if (player.isZombie === true) {
         ctx.fillStyle = '#000000';
         ctx.font = '16px sans-serif';
         ctx.textAlign = 'center';
@@ -184,7 +184,7 @@ function GameView({ playerId, username }: { playerId: string; username: string }
       ctx.fillText(player.username, player.x, player.y - 15);
       
       // Draw infection radius for zombies
-      if (player.isZombie) {
+      if (player.isZombie === true) {
         ctx.strokeStyle = '#ff000040';
         ctx.lineWidth = 1;
         ctx.beginPath();
@@ -234,7 +234,7 @@ function GameView({ playerId, username }: { playerId: string; username: string }
 
         let deltaX = 0;
         let deltaY = 0;
-        const speed = getPlayerSpeed(currentPlayer.isZombie);
+        const speed = getPlayerSpeed(currentPlayer.isZombie === true);
 
         // Calculate movement direction
         if (keysPressed.has('w') || keysPressed.has('arrowup')) deltaY -= 1;
@@ -294,18 +294,18 @@ function GameView({ playerId, username }: { playerId: string; username: string }
       <div className="flex justify-between items-center mb-4">
         <div>
           <h2 className="text-lg font-bold">
-            Playing as: {username} {currentPlayer.isZombie ? '🧟 (ZOMBIE)' : '👤 (HUMAN)'}
+            Playing as: {username} {currentPlayer.isZombie === true ? '🧟 (ZOMBIE)' : '👤 (HUMAN)'}
           </h2>
           <div className="text-sm opacity-70">
-            {currentPlayer.isZombie ? 'Infect all humans!' : 'Survive the zombie apocalypse!'}
+            {currentPlayer.isZombie === true ? 'Infect all humans!' : 'Survive the zombie apocalypse!'}
           </div>
         </div>
         <div className="text-right">
           <div className="text-sm opacity-70">
-            {currentPlayer.isZombie ? 'Zombie Speed' : 'Health'}
+            {currentPlayer.isZombie === true ? 'Zombie Speed' : 'Health'}
           </div>
           <div className="flex items-center gap-2">
-            {currentPlayer.isZombie ? (
+            {currentPlayer.isZombie === true ? (
               <div className="text-sm font-mono">
                 Speed: {getPlayerSpeed(true).toFixed(1)} 
                 <span className="text-xs opacity-60"> ({zombiePlayers.length} zombies)</span>
@@ -351,7 +351,7 @@ function GameView({ playerId, username }: { playerId: string; username: string }
       <div className="mt-4 text-sm opacity-70 text-center">
         Use WASD or arrow keys to move around the city (supports diagonal movement)
         <br />
-        {currentPlayer.isZombie ? 
+        {currentPlayer.isZombie === true ? 
           'Touch humans to infect them. More zombies = slower movement!' : 
           'Avoid zombies to survive. They get slower as their numbers grow.'}
       </div>

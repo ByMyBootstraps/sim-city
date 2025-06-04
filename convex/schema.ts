@@ -8,8 +8,8 @@ export default defineSchema({
     y: v.number(),
     health: v.number(),
     lastActiveTime: v.number(),
-    isZombie: v.boolean(),
-    connectionId: v.string(), // For tracking disconnections
+    isZombie: v.optional(v.boolean()), // Optional for backward compatibility
+    connectionId: v.optional(v.string()), // Optional for backward compatibility
   })
     .index("by_username", ["username"])
     .index("by_lastActiveTime", ["lastActiveTime"])

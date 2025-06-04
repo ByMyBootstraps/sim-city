@@ -55,7 +55,7 @@ export const spawnPlayer = mutation({
       health: 100,
       lastActiveTime: Date.now(),
       isZombie: isFirstPlayer, // First player becomes zombie
-      connectionId,
+      connectionId: connectionId,
     });
 
     // Update game state if this was the first zombie
@@ -89,9 +89,9 @@ export const updatePlayerPosition = mutation({
     });
 
     // Check for zombie infections if this player is a zombie
-    if (player.isZombie) {
+    if (player.isZombie === true) {
       const allPlayers = await ctx.db.query("players").collect();
-      const humanPlayers = allPlayers.filter(p => !p.isZombie && p._id !== playerId);
+      const humanPlayers = allPlayers.filter(p => p.isZombie !== true && p._id !== playerId);
       
       for (const human of humanPlayers) {
         const distance = Math.sqrt(Math.pow(x - human.x, 2) + Math.pow(y - human.y, 2));
