@@ -42,7 +42,7 @@ export const spawnNPCZombies = internalMutation({
 });
 
 // Update NPC positions and AI
-export const updateNPCZombies = internalMutation({
+export const updateNPCZombies = mutation({
   args: {},
   handler: async (ctx) => {
     const npcs = await ctx.db.query("npcZombies").collect();
@@ -62,9 +62,26 @@ export const updateNPCZombies = internalMutation({
       );
       
       if (distanceToTarget < 5 || now > npc.wanderCooldown) {
-        // Pick a new random target within city bounds
-        newTargetX = 50 + Math.random() * 700; // Keep within city bounds
-        newTargetY = 50 + Math.random() * 500;
+        // Pick targets that prefer roads and sidewalks
+        const roadTargets = [
+          { x: 150, y: 200 }, { x: 350, y: 200 }, { x: 550, y: 200 }, { x: 750, y: 200 },
+          { x: 150, y: 400 }, { x: 350, y: 400 }, { x: 550, y: 400 }, { x: 750, y: 400 },
+          { x: 220, y: 100 }, { x: 220, y: 300 }, { x: 220, y: 500 },
+          { x: 420, y: 100 }, { x: 420, y: 300 }, { x: 420, y: 500 },
+          { x: 620, y: 100 }, { x: 620, y: 300 }, { x: 620, y: 500 },
+        ];
+        
+        if (Math.random() < 0.7) {
+          // 70% chance to target roads/sidewalks
+          const target = roadTargets[Math.floor(Math.random() * roadTargets.length)];
+          newTargetX = target.x + (Math.random() - 0.5) * 60;
+          newTargetY = target.y + (Math.random() - 0.5) * 60;
+        } else {
+          // 30% chance for random wandering
+          newTargetX = 50 + Math.random() * 700;
+          newTargetY = 50 + Math.random() * 500;
+        }
+        
         newWanderCooldown = now + 2000 + Math.random() * 4000; // 2-6 seconds until next wander
       }
       

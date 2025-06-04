@@ -114,6 +114,7 @@ function GameView({ playerId, username }: { playerId: string; username: string }
   const updatePosition = useMutation(api.players.updatePlayerPosition);
   const cleanupDisconnected = useMutation(api.players.cleanupDisconnectedPlayers);
   const runNPCAI = useMutation(api.npcZombies.runNPCAI);
+  const updateNPCs = useMutation(api.npcZombies.updateNPCZombies);
   
   // Professional movement system state
   const keysRef = useRef<{[key: string]: boolean}>({});
@@ -359,7 +360,7 @@ function GameView({ playerId, username }: { playerId: string; username: string }
     }, 10000); // Clean up every 10 seconds
 
     const npcAI = setInterval(() => {
-      void runNPCAI();
+      void updateNPCs();
     }, 100); // Run NPC AI every 100ms for smooth movement
 
     return () => {
@@ -437,7 +438,7 @@ function GameView({ playerId, username }: { playerId: string; username: string }
         Smooth movement: Hold WASD or arrow keys (diagonal movement supported)
         <br />
         {currentPlayer.isZombie === true ? 
-          'Touch humans to infect them. Each infection spawns 10 NPC zombies!' : 
+          'Touch humans to infect them. Fewer humans = fewer NPC zombies!' : 
           'Avoid player zombies to survive. NPCs roam the city (10 per human player).'}
       </div>
     </div>
