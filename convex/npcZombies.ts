@@ -189,6 +189,22 @@ export const updateNPCZombies = mutation({
         newY = Math.max(25, Math.min(575, newY));
       }
       
+      // Check for NPC infections - NPCs can zombify humans they touch
+      for (const human of humanPlayers) {
+        const distance = Math.sqrt(Math.pow(newX - human.x, 2) + Math.pow(newY - human.y, 2));
+        
+        // Infection radius of 20 pixels for NPCs
+        if (distance <= 20) {
+          await ctx.db.patch(human._id, {
+            isZombie: true,
+            health: 100, // Zombies have full health
+          });
+          
+          // Rebalance NPCs when a human gets infected (fewer humans = fewer NPCs needed)
+          await ctx.runMutation(internal.npcZombies.balanceNPCs, {});
+        }
+      }
+      
       // Update NPC with new position and state
       await ctx.db.patch(npc._id, {
         x: newX,

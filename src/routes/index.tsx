@@ -362,6 +362,13 @@ function GameView({ playerId, username }: { playerId: string; username: string }
           ctx.lineTo(nearestHuman.human.x, nearestHuman.human.y);
           ctx.stroke();
         }
+        
+        // Draw infection radius for NPCs (smaller than player zombies)
+        ctx.strokeStyle = '#8B451340';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(npc.x, npc.y, 20, 0, 2 * Math.PI);
+        ctx.stroke();
       });
 
       requestAnimationFrame(render);
@@ -457,7 +464,7 @@ function GameView({ playerId, username }: { playerId: string; username: string }
         <br />
         {currentPlayer.isZombie === true ? 
           'Touch humans to infect them. Fewer humans = fewer NPC zombies!' : 
-          'Avoid zombies! NPCs actively hunt humans with pathfinding (10 per human).'}
+          'Avoid ALL zombies! NPCs and players can both infect you on contact.'}
       </div>
     </div>
   );
