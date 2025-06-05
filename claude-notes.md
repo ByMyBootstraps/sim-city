@@ -54,6 +54,7 @@
 2. Production deployment ready
 
 ### Commits Made:
+- 6c829d7: fix: prevent second player from stealing host status during lobby
 - a8689aa: fix: prevent game mechanics from running during lobby state
 - f921f4c: fix: resolve lobby system issues and add reset functionality
 - 5b9fccf: feat: implement lobby system with host-controlled game start
