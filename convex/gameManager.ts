@@ -95,7 +95,7 @@ export const joinLobby = internalMutation({
     }
 
     // Assign host if no host exists
-    if (!gameState.hostPlayerId || gameState.status === "lobby") {
+    if (!gameState.hostPlayerId) {
       await ctx.db.patch(gameState._id, {
         hostPlayerId: playerId,
         playerCount: activePlayers.length,
@@ -107,7 +107,7 @@ export const joinLobby = internalMutation({
       });
     }
 
-    return { success: true, isHost: gameState.hostPlayerId === playerId || !gameState.hostPlayerId };
+    return { success: true, isHost: !gameState.hostPlayerId || gameState.hostPlayerId === playerId };
   },
 });
 
