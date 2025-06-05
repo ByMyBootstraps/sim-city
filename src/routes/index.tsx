@@ -61,15 +61,13 @@ function UsernameForm({
   onJoin: (playerId: Id<"players">) => void;
 }) {
   const spawnPlayer = useMutation(api.players.spawnPlayer);
-  const resetGame = useMutation(api.players.resetGameToLobby);
-  const [isSpawning, setIsSpawning] = useState(false);
-  const [isResetting, setIsResetting] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
 
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim()) return;
     
-    setIsSpawning(true);
+    setIsJoining(true);
     try {
       const connectionId = Math.random().toString(36).substring(7);
       const playerId = await spawnPlayer({ 
@@ -79,63 +77,68 @@ function UsernameForm({
       onJoin(playerId);
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Failed to join game');
-      setIsSpawning(false);
+      setIsJoining(false);
     }
-  };
-
-  const handleReset = async () => {
-    setIsResetting(true);
-    try {
-      await resetGame();
-      alert('Game reset successfully! The first player to join will be the host.');
-    } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to reset game');
-    }
-    setIsResetting(false);
   };
 
   return (
-    <div className="text-center">
-      <h1 className="mb-8">🧟 Zombie City Survival</h1>
-      <p className="mb-6 text-base-content/70">
-        The first player to join becomes the host and can start the game.<br/>
-        Other players wait in lobby until host starts the game.
-      </p>
-      
-      <form onSubmit={(e) => void handleJoin(e)} className="not-prose max-w-md mx-auto">
-        <div className="form-control mb-4">
-          <label className="label">
-            <span className="label-text">Choose your username</span>
-          </label>
-          <input 
-            type="text" 
-            className="input input-bordered w-full" 
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="Enter username..."
-            maxLength={20}
-            required
-          />
+    <div className="min-h-screen bg-gradient-to-br from-base-200 to-base-300 flex items-center justify-center">
+      <div className="card w-full max-w-md bg-base-100 shadow-xl">
+        <div className="card-body">
+          <div className="text-center mb-6">
+            <h1 className="text-4xl font-bold mb-2">🧟 Zombie City</h1>
+            <h2 className="text-2xl text-primary">Survival</h2>
+            <p className="text-sm opacity-70 mt-4">
+              Survive the zombie apocalypse or become the hunter
+            </p>
+          </div>
+          
+          <form onSubmit={(e) => void handleJoin(e)} className="space-y-4">
+            <div className="form-control">
+              <label className="label">
+                <span className="label-text font-medium">Choose your survivor name</span>
+              </label>
+              <input 
+                type="text" 
+                className="input input-bordered w-full focus:input-primary" 
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Enter your name..."
+                maxLength={20}
+                required
+                autoFocus
+              />
+            </div>
+            
+            <button 
+              type="submit" 
+              className="btn btn-primary btn-lg w-full"
+              disabled={isJoining || !username.trim()}
+            >
+              {isJoining ? (
+                <>
+                  <span className="loading loading-spinner loading-sm"></span>
+                  Joining Game...
+                </>
+              ) : (
+                'Join Game'
+              )}
+            </button>
+          </form>
+          
+          <div className="text-center mt-6">
+            <div className="stats stats-horizontal text-sm">
+              <div className="stat">
+                <div className="stat-title text-xs">Game Mode</div>
+                <div className="stat-value text-sm">Multiplayer</div>
+              </div>
+              <div className="stat">
+                <div className="stat-title text-xs">Max Players</div>
+                <div className="stat-value text-sm">20</div>
+              </div>
+            </div>
+          </div>
         </div>
-        
-        <button 
-          type="submit" 
-          className="btn btn-primary btn-lg w-full mb-4"
-          disabled={isSpawning || !username.trim()}
-        >
-          {isSpawning ? 'Spawning...' : 'Enter City'}
-        </button>
-      </form>
-      
-      <div className="mt-6 pt-4 border-t border-base-300">
-        <p className="text-sm opacity-70 mb-2">For testing:</p>
-        <button 
-          className="btn btn-secondary btn-sm"
-          onClick={() => void handleReset()}
-          disabled={isResetting}
-        >
-          {isResetting ? 'Resetting...' : 'Reset Game to Lobby'}
-        </button>
       </div>
     </div>
   );
@@ -465,68 +468,115 @@ function GameView({ playerId, username }: { playerId: Id<"players">; username: s
     };
 
     return (
-      <div className="text-center">
-        <h1 className="mb-8">🧟 Zombie City Survival - Lobby</h1>
-        <div className="mb-6">
-          {countdownActive ? (
-            <div>
-              <h2 className="text-3xl mb-4 text-primary">Game Starting in {countdownSeconds}...</h2>
-              <p className="text-lg mb-4">Get ready for the zombie apocalypse!</p>
-              {isHost && (
-                <button 
-                  className="btn btn-secondary"
-                  onClick={() => void handleCancelStart()}
-                >
-                  Cancel Start
-                </button>
-              )}
-            </div>
-          ) : (
-            <div>
-              <h2 className="text-xl mb-4">Waiting for game to start...</h2>
-              <div className="mb-4">
-                <span className="font-semibold">Players in lobby:</span>
-                <div className="mt-2">
+      <div className="min-h-screen bg-gradient-to-br from-base-200 to-base-300 flex items-center justify-center">
+        <div className="card w-full max-w-2xl bg-base-100 shadow-xl">
+          <div className="card-body">
+            {countdownActive ? (
+              <div className="text-center">
+                <div className="mb-6">
+                  <h1 className="text-5xl font-bold text-primary mb-4">{countdownSeconds}</h1>
+                  <h2 className="text-2xl font-semibold mb-2">Game Starting...</h2>
+                  <p className="text-lg opacity-70">Get ready for the zombie apocalypse!</p>
+                </div>
+                
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-6">
                   {players.map((player) => (
-                    <div key={player._id} className={`inline-block px-2 py-1 m-1 rounded ${
-                      player._id === gameState.hostPlayerId ? 'bg-primary text-primary-content' : 'bg-base-200'
+                    <div key={player._id} className={`badge p-3 ${
+                      player._id === gameState.hostPlayerId ? 'badge-primary' : 'badge-neutral'
                     }`}>
-                      {player.username} {player._id === gameState.hostPlayerId && '(Host)'}
+                      {player.username}
+                      {player._id === gameState.hostPlayerId && ' 👑'}
                     </div>
                   ))}
                 </div>
-              </div>
-              <div className="text-sm opacity-70 mb-6">
-                {players.length}/20 players joined
-              </div>
-              
-              {isHost ? (
-                <div>
-                  <p className="mb-4">You are the host. You can start the game when ready!</p>
+                
+                {isHost && (
                   <button 
-                    className="btn btn-primary btn-lg"
-                    onClick={() => void handleStartGame()}
-                    disabled={isStarting || players.length < 2}
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => void handleCancelStart()}
                   >
-                    {isStarting ? 'Starting...' : 'Start Game'}
+                    Cancel Start
                   </button>
-                  {players.length < 2 && (
-                    <p className="text-sm mt-2 text-warning">Need at least 2 players to start</p>
-                  )}
-                  <p className="text-xs mt-2 opacity-60">
-                    A random player will become the first zombie when the game starts
-                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="text-center">
+                <div className="mb-6">
+                  <h1 className="text-3xl font-bold mb-2">🧟 Game Lobby</h1>
+                  <p className="text-lg opacity-70">Waiting for players...</p>
                 </div>
-              ) : (
-                <div>
-                  <p className="text-lg">Waiting for host to start the game...</p>
-                  <p className="text-sm opacity-70 mt-2">
-                    The host ({players.find(p => p._id === gameState.hostPlayerId)?.username}) will start when ready
-                  </p>
+
+                <div className="stats shadow mb-6">
+                  <div className="stat">
+                    <div className="stat-title">Players Ready</div>
+                    <div className="stat-value text-primary">{players.length}</div>
+                    <div className="stat-desc">out of 20 max</div>
+                  </div>
+                  <div className="stat">
+                    <div className="stat-title">Game Status</div>
+                    <div className="stat-value text-sm">Lobby</div>
+                    <div className="stat-desc">Waiting to start</div>
+                  </div>
                 </div>
-              )}
-            </div>
-          )}
+                
+                <div className="mb-6">
+                  <h3 className="font-semibold mb-3">Connected Players</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {players.map((player) => (
+                      <div key={player._id} className={`badge p-3 ${
+                        player._id === gameState.hostPlayerId ? 'badge-primary' : 'badge-neutral'
+                      }`}>
+                        {player.username}
+                        {player._id === gameState.hostPlayerId && ' 👑'}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                {isHost ? (
+                  <div className="space-y-4">
+                    <div className="alert alert-info">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="stroke-current shrink-0 w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                      <span>You are the host. Start the game when ready!</span>
+                    </div>
+                    
+                    <button 
+                      className="btn btn-primary btn-lg w-full"
+                      onClick={() => void handleStartGame()}
+                      disabled={isStarting || players.length < 2}
+                    >
+                      {isStarting ? (
+                        <>
+                          <span className="loading loading-spinner loading-sm"></span>
+                          Starting Game...
+                        </>
+                      ) : (
+                        'Start Game'
+                      )}
+                    </button>
+                    
+                    {players.length < 2 && (
+                      <div className="alert alert-warning">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.464 0L3.349 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+                        <span>Need at least 2 players to start</span>
+                      </div>
+                    )}
+                    
+                    <p className="text-xs opacity-60">
+                      A random player will become the first zombie when the game starts
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="alert">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="stroke-current shrink-0 w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                      <span>Waiting for {players.find(p => p._id === gameState.hostPlayerId)?.username || 'host'} to start the game...</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -536,32 +586,57 @@ function GameView({ playerId, username }: { playerId: Id<"players">; username: s
   if (gameState?.status === 'ended') {
     const zombies = players.filter(p => p.isZombie === true);
     const humans = players.filter(p => p.isZombie !== true);
+    const zombiesWon = humans.length === 0;
     
     return (
-      <div className="text-center">
-        <h1 className="mb-8">🧟 Game Over!</h1>
-        <div className="mb-6">
-          <h2 className="text-2xl mb-4">
-            {humans.length === 0 ? '🧟 Zombies Win!' : '🏃 Humans Survived!'}
-          </h2>
-          
-          <div className="mb-6">
-            <div className="mb-4">
-              <h3 className="text-lg font-semibold mb-2">Final Results:</h3>
-              <div className="grid grid-cols-2 gap-4 max-w-md mx-auto">
-                <div className="bg-error text-error-content p-3 rounded">
-                  <div className="font-bold">Zombies</div>
-                  <div>{zombies.length} players</div>
+      <div className="min-h-screen bg-gradient-to-br from-base-200 to-base-300 flex items-center justify-center">
+        <div className="card w-full max-w-2xl bg-base-100 shadow-xl">
+          <div className="card-body text-center">
+            <div className="mb-6">
+              <h1 className="text-4xl font-bold mb-4">
+                {zombiesWon ? '🧟 Zombies Win!' : '🏃 Humans Survived!'}
+              </h1>
+              <p className="text-lg opacity-70">
+                {zombiesWon ? 'The infection has spread completely!' : 'Humanity endures against all odds!'}
+              </p>
+            </div>
+            
+            <div className="stats shadow mb-6">
+              <div className="stat">
+                <div className="stat-figure text-error">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="inline-block w-8 h-8 stroke-current"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                 </div>
-                <div className="bg-success text-success-content p-3 rounded">
-                  <div className="font-bold">Survivors</div>
-                  <div>{humans.length} players</div>
+                <div className="stat-title">Zombies</div>
+                <div className="stat-value text-error">{zombies.length}</div>
+                <div className="stat-desc">Infected players</div>
+              </div>
+              
+              <div className="stat">
+                <div className="stat-figure text-success">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="inline-block w-8 h-8 stroke-current"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>
                 </div>
+                <div className="stat-title">Survivors</div>
+                <div className="stat-value text-success">{humans.length}</div>
+                <div className="stat-desc">Remaining humans</div>
               </div>
             </div>
             
-            <div className="text-sm opacity-70">
-              Returning to lobby in a few seconds...
+            <div className="mb-6">
+              <h3 className="font-semibold mb-3">Final Player Status</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {players.map((player) => (
+                  <div key={player._id} className={`badge p-3 ${
+                    player.isZombie ? 'badge-error' : 'badge-success'
+                  }`}>
+                    {player.isZombie ? '🧟' : '🏃'} {player.username}
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            <div className="alert alert-info">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="stroke-current shrink-0 w-6 h-6"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+              <span>Returning to lobby in a few seconds...</span>
             </div>
           </div>
         </div>
